@@ -276,6 +276,8 @@ static rdpChannel* freerdp_channels_find_channel_by_name(rdpChannels* channels,
  * must be called by same thread that calls freerdp_chanman_load_plugin
  * according to MS docs
  * only called from main thread
+ * 
+ * 主要目的就是填充结构g_init_channels
  */
 static uint32 FREERDP_CC MyVirtualChannelInit(void** ppInitHandle, PCHANNEL_DEF pChannel,
 	int channelCount, uint32 versionRequested, PCHANNEL_INIT_EVENT_FN pChannelInitEventProc)
@@ -360,7 +362,7 @@ static uint32 FREERDP_CC MyVirtualChannelInit(void** ppInitHandle, PCHANNEL_DEF 
 		if (channels->settings->num_channels < 16)
 		{
 			lrdp_channel = channels->settings->channels + channels->settings->num_channels;
-			strncpy(lrdp_channel->name, lchannel_def->name, 7);
+			strncpy(lrdp_channel->name, lchannel_def->name, 7); /* 此处的7即为CHANNEL_NAME_LEN */
 			lrdp_channel->options = lchannel_def->options;
 			channels->settings->num_channels++;
 		}
@@ -457,6 +459,7 @@ static uint32 FREERDP_CC MyVirtualChannelClose(uint32 openHandle)
 		return CHANNEL_RC_NOT_OPEN;
 	}
 
+	/* 只有这一步才是最关键的,将状态设置为nothing */
 	lchannel_data->flags = 0;
 
 	return CHANNEL_RC_OK;

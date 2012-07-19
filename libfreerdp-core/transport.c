@@ -306,6 +306,7 @@ static int transport_read_nonblocking(rdpTransport* transport)
 	if (status <= 0)
 		return status;
 
+	/* transport中没有更改p指针 */
 	stream_seek(transport->recv_buffer, status);
 
 	return status;
@@ -380,20 +381,25 @@ int transport_check_fds(rdpTransport** ptransport)
 	uint16 length;
 	STREAM* received;
 	rdpTransport* transport = *ptransport;
-
+	
+	/* 1.清除接收信号 */
 	wait_obj_clear(transport->recv_event);
 
+	/* 2.从transport->tcp->sockfd中读取数据到transport->recv_buffer */
 	status = transport_read_nonblocking(transport);
 
-	if (status < 0)
+	if (status < 0)	/*连接断开*/
 		return status;
 
+	/* 3.处理接受到的数据 */
 	while ((pos = stream_get_pos(transport->recv_buffer)) > 0)
 	{
+		/* 3.1 读取TPKT报头 */
 		stream_set_pos(transport->recv_buffer, 0);
 		if (tpkt_verify_header(transport->recv_buffer)) /* TPKT */
 		{
 			/* Ensure the TPKT header is available. */
+			/* TPKT header占4个字节 */
 			if (pos <= 4)
 			{
 				stream_set_pos(transport->recv_buffer, pos);
@@ -436,6 +442,7 @@ int transport_check_fds(rdpTransport** ptransport)
 		 * A complete packet has been received. In case there are trailing data
 		 * for the next packet, we copy it to the new receive buffer.
 		 */
+		/* 3.2 读取X.224报文内容 */
 		received = transport->recv_buffer;
 		transport->recv_buffer = stream_new(BUFFER_SIZE);
 

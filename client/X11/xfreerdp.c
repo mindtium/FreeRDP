@@ -1108,6 +1108,7 @@ int xfreerdp_run(freerdp* instance)
 	}
 
 	xfi = ((xfContext*) instance->context)->xfi;
+	/* 由此看来freerdp_connect中已经完成了channel的初始化 */
 	channels = instance->context->channels;
 
 	while (!xfi->disconnect && !freerdp_shall_disconnect(instance))
@@ -1242,7 +1243,7 @@ void* thread_func(void* param)
 
 	g_thread_count--;
 
-	if (g_thread_count < 1)
+	if (g_thread_count < 1)	/* 这是最后一个session线程,通知主线程准备结束 */
 		freerdp_sem_signal(g_sem);
 
 	pthread_exit(NULL);
@@ -1305,6 +1306,7 @@ int main(int argc, char* argv[])
 	g_thread_count++;
 	pthread_create(&thread, 0, thread_func, data);
 
+	/* 等待所有线程的结束,在这里貌似只有一个线程 */
 	while (g_thread_count > 0)
 	{
 		freerdp_sem_wait(g_sem);

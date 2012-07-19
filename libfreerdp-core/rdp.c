@@ -810,7 +810,7 @@ static boolean rdp_recv_pdu(rdpRdp* rdp, STREAM* s)
  * Receive an RDP packet.\n
  * @param rdp RDP module
  */
-
+/* 此函数貌似没有被使用过啊 */
 void rdp_recv(rdpRdp* rdp)
 {
 	STREAM* s;
