@@ -1183,11 +1183,16 @@ int xfreerdp_run(freerdp* instance)
 			printf("Closed from X\n");
 			break;
 		}
+		/* 1.向服务器发送通道数据; 
+		 * 2.若有数据过来,在通道的event队列中添加event 
+		 */
 		if (freerdp_channels_check_fds(channels, instance) != true)
 		{
 			printf("Failed to check channel manager file descriptor\n");
 			break;
 		}
+
+		/* 处理虚拟通道的event队列中的event */
 		xf_process_channel_event(channels, instance);
 	}
 

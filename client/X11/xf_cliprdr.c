@@ -411,8 +411,10 @@ static void xf_cliprdr_send_null_data_response(xfInfo* xfi)
 	xf_cliprdr_send_data_response(xfi, NULL, 0);
 }
 
-static void xf_cliprdr_process_cb_monitor_ready_event(xfInfo* xfi)
+void xf_cliprdr_process_cb_monitor_ready_event(xfInfo* xfi)
 {
+	/* 此中代码应该删掉
+	 * 改为: 向Web通知monitor ready消息,并等待web的format list */
 	clipboardContext* cb = (clipboardContext*) xfi->clipboard_context;
 
 	xf_cliprdr_send_format_list(xfi);
@@ -1023,18 +1025,19 @@ void xf_process_cliprdr_event(xfInfo* xfi, RDP_EVENT* event)
 {
 	switch (event->event_type)
 	{
+		/* server 通知client已经开始监控剪贴板 */
 		case RDP_EVENT_TYPE_CB_MONITOR_READY:
 			xf_cliprdr_process_cb_monitor_ready_event(xfi);
 			break;
-
+		/* server通知client剪贴板数据发生变化 */
 		case RDP_EVENT_TYPE_CB_FORMAT_LIST:
 			xf_cliprdr_process_cb_format_list_event(xfi, (RDP_CB_FORMAT_LIST_EVENT*) event);
 			break;
-
+		/* server向client请求剪贴板数据 */
 		case RDP_EVENT_TYPE_CB_DATA_REQUEST:
 			xf_cliprdr_process_cb_data_request_event(xfi, (RDP_CB_DATA_REQUEST_EVENT*) event);
 			break;
-
+		/* server向client回复剪贴板数据的请求*/
 		case RDP_EVENT_TYPE_CB_DATA_RESPONSE:
 			xf_cliprdr_process_cb_data_response_event(xfi, (RDP_CB_DATA_RESPONSE_EVENT*) event);
 			break;
