@@ -1,9 +1,7 @@
-# FreeRDP: A Remote Desktop Protocol Client
+# FreeRDP: A Remote Desktop Protocol Implementation
 # libfreerdp-rail cmake build script
 #
-# Copyright 2011 O.S. Systems Software Ltda.
-# Copyright 2011 Otavio Salvador <otavio@ossystems.com.br>
-# Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
+# Copyright 2012 Marc-Andre Moreau <marcandre.moreau@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,27 +15,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(FREERDP_RAIL_SRCS
+set(MODULE_NAME "freerdp-rail")
+set(MODULE_PREFIX "FREERDP_RAIL")
+
+set(${MODULE_PREFIX}_SRCS
 	window_list.c
 	window.c
 	icon.c
 	rail.c
 	librail.h)
 
-if(WITH_MONOLITHIC_BUILD)
-	add_library(freerdp-rail OBJECT ${FREERDP_RAIL_SRCS})
+if(MONOLITHIC_BUILD)
+	add_library(${MODULE_NAME} OBJECT ${${MODULE_PREFIX}_SRCS})
 else()
-	add_library(freerdp-rail ${FREERDP_RAIL_SRCS})
+	add_library(${MODULE_NAME} ${${MODULE_PREFIX}_SRCS})
 endif()
 
-set_target_properties(freerdp-rail PROPERTIES VERSION ${FREERDP_VERSION_FULL} SOVERSION ${FREERDP_VERSION} PREFIX "lib")
+set_target_properties(${MODULE_NAME} PROPERTIES VERSION ${FREERDP_VERSION_FULL} SOVERSION ${FREERDP_VERSION} PREFIX "lib")
 
-set(FREERDP_RAIL_LIBS)
-
-if(WITH_MONOLITHIC_BUILD)
-	set(FREERDP_LIBS ${FREERDP_LIBS} ${FREERDP_RAIL_LIBS} PARENT_SCOPE)
+if(MONOLITHIC_BUILD)
+	set(FREERDP_LIBS ${FREERDP_LIBS} ${${MODULE_PREFIX}_LIBS} PARENT_SCOPE)
 else()
-	set(FREERDP_RAIL_LIBS ${FREERDP_RAIL_LIBS} freerdp-utils)
-	target_link_libraries(freerdp-rail ${FREERDP_RAIL_LIBS})
-	install(TARGETS freerdp-rail DESTINATION ${CMAKE_INSTALL_LIBDIR})
+	set(FREERDP_RAIL_LIBS ${${MODULE_PREFIX}_LIBS} freerdp-utils)
+
+	target_link_libraries(${MODULE_NAME} ${${MODULE_PREFIX}_LIBS})
+	install(TARGETS ${MODULE_NAME} DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
+
+set_property(TARGET ${MODULE_NAME} PROPERTY FOLDER "FreeRDP/libfreerdp")

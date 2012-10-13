@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol Client
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * Profiler Utils
  *
  * Copyright 2011 Stephen Erisman
@@ -21,13 +21,16 @@
 #include "config.h"
 #endif
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <freerdp/utils/profiler.h>
 
 PROFILER* profiler_create(char* name)
 {
 	PROFILER* profiler;
 
-	profiler = (PROFILER*) xmalloc(sizeof(PROFILER));
+	profiler = (PROFILER*) malloc(sizeof(PROFILER));
 	
 	profiler->name = name;
 	profiler->stopwatch = stopwatch_create();
@@ -39,7 +42,7 @@ void profiler_free(PROFILER* profiler)
 {	
 	stopwatch_free(profiler->stopwatch);
 	
-	xfree(profiler);
+	free(profiler);
 }
 
 void profiler_enter(PROFILER* profiler)

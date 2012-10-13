@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol Client
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * RDP Server Redirection
  *
  * Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
@@ -25,7 +25,7 @@
 
 #include "redirection.h"
 
-void rdp_print_redirection_flags(uint32 flags)
+void rdp_print_redirection_flags(UINT32 flags)
 {
 	printf("redirectionFlags = {\n");
 
@@ -59,16 +59,16 @@ void rdp_print_redirection_flags(uint32 flags)
 	printf("}\n");
 }
 
-boolean rdp_recv_server_redirection_pdu(rdpRdp* rdp, STREAM* s)
+BOOL rdp_recv_server_redirection_pdu(rdpRdp* rdp, STREAM* s)
 {
-	uint16 flags;
-	uint16 length;
+	UINT16 flags;
+	UINT16 length;
 	rdpRedirection* redirection = rdp->redirection;
 
-	stream_read_uint16(s, flags); /* flags (2 bytes) */
-	stream_read_uint16(s, length); /* length (2 bytes) */
-	stream_read_uint32(s, redirection->sessionID); /* sessionID (4 bytes) */
-	stream_read_uint32(s, redirection->flags); /* redirFlags (4 bytes) */
+	stream_read_UINT16(s, flags); /* flags (2 bytes) */
+	stream_read_UINT16(s, length); /* length (2 bytes) */
+	stream_read_UINT32(s, redirection->sessionID); /* sessionID (4 bytes) */
+	stream_read_UINT32(s, redirection->flags); /* redirFlags (4 bytes) */
 
 	DEBUG_REDIR("flags: 0x%04X, length:%d, sessionID:0x%08X", flags, length, redirection->sessionID);
 
@@ -78,81 +78,80 @@ boolean rdp_recv_server_redirection_pdu(rdpRdp* rdp, STREAM* s)
 
 	if (redirection->flags & LB_TARGET_NET_ADDRESS)
 	{
-		freerdp_string_read_length32(s, &redirection->targetNetAddress, rdp->settings->uniconv);
+		freerdp_string_read_length32(s, &redirection->targetNetAddress);
 		DEBUG_REDIR("targetNetAddress: %s", redirection->targetNetAddress.ascii);
 	}
 
 	if (redirection->flags & LB_LOAD_BALANCE_INFO)
 	{
-		uint32 loadBalanceInfoLength;
-		stream_read_uint32(s, loadBalanceInfoLength);
-		freerdp_blob_alloc(&redirection->loadBalanceInfo, loadBalanceInfoLength);
-		stream_read(s, redirection->loadBalanceInfo.data, loadBalanceInfoLength);
+		stream_read_UINT32(s, redirection->LoadBalanceInfoLength);
+		redirection->LoadBalanceInfo = (BYTE*) malloc(redirection->LoadBalanceInfoLength);
+		stream_read(s, redirection->LoadBalanceInfo, redirection->LoadBalanceInfoLength);
 #ifdef WITH_DEBUG_REDIR
 		DEBUG_REDIR("loadBalanceInfo:");
-		freerdp_hexdump(redirection->loadBalanceInfo.data, redirection->loadBalanceInfo.length);
+		freerdp_hexdump(redirection->LoadBalanceInfo, redirection->LoadBalanceInfoLength);
 #endif
 	}
 
 	if (redirection->flags & LB_USERNAME)
 	{
-		freerdp_string_read_length32(s, &redirection->username, rdp->settings->uniconv);
+		freerdp_string_read_length32(s, &redirection->username);
 		DEBUG_REDIR("username: %s", redirection->username.ascii);
 	}
 
 	if (redirection->flags & LB_DOMAIN)
 	{
-		freerdp_string_read_length32(s, &redirection->domain, rdp->settings->uniconv);
+		freerdp_string_read_length32(s, &redirection->domain);
 		DEBUG_REDIR("domain: %s", redirection->domain.ascii);
 	}
 
 	if (redirection->flags & LB_PASSWORD)
 	{
-		uint32 passwordLength;
-		stream_read_uint32(s, passwordLength);	/* Note: length (hopefully) includes double zero termination */
-		freerdp_blob_alloc(&redirection->password_cookie, passwordLength);
-		stream_read(s, redirection->password_cookie.data, passwordLength);
+		/* Note: length (hopefully) includes double zero termination */
+		stream_read_UINT32(s, redirection->PasswordCookieLength);
+		redirection->PasswordCookie = (BYTE*) malloc(redirection->PasswordCookieLength);
+		stream_read(s, redirection->PasswordCookie, redirection->PasswordCookieLength);
 
 #ifdef WITH_DEBUG_REDIR
 		DEBUG_REDIR("password_cookie:");
-		freerdp_hexdump(redirection->password_cookie.data, redirection->password_cookie.length);
+		freerdp_hexdump(redirection->PasswordCookie, redirection->PasswordCookieLength);
 #endif
 	}
 
 	if (redirection->flags & LB_TARGET_FQDN)
 	{
-		freerdp_string_read_length32(s, &redirection->targetFQDN, rdp->settings->uniconv);
+		freerdp_string_read_length32(s, &redirection->targetFQDN);
 		DEBUG_REDIR("targetFQDN: %s", redirection->targetFQDN.ascii);
 	}
 
 	if (redirection->flags & LB_TARGET_NETBIOS_NAME)
 	{
-		freerdp_string_read_length32(s, &redirection->targetNetBiosName, rdp->settings->uniconv);
+		freerdp_string_read_length32(s, &redirection->targetNetBiosName);
 		DEBUG_REDIR("targetNetBiosName: %s", redirection->targetNetBiosName.ascii);
 	}
 
 	if (redirection->flags & LB_CLIENT_TSV_URL)
 	{
-		freerdp_string_read_length32(s, &redirection->tsvUrl, rdp->settings->uniconv);
+		freerdp_string_read_length32(s, &redirection->tsvUrl);
 		DEBUG_REDIR("tsvUrl: %s", redirection->tsvUrl.ascii);
 	}
 
 	if (redirection->flags & LB_TARGET_NET_ADDRESSES)
 	{
 		int i;
-		uint32 count;
-		uint32 targetNetAddressesLength;
+		UINT32 count;
+		UINT32 targetNetAddressesLength;
 
-		stream_read_uint32(s, targetNetAddressesLength);
+		stream_read_UINT32(s, targetNetAddressesLength);
 
-		stream_read_uint32(s, redirection->targetNetAddressesCount);
+		stream_read_UINT32(s, redirection->targetNetAddressesCount);
 		count = redirection->targetNetAddressesCount;
 
 		redirection->targetNetAddresses = (rdpString*) xzalloc(count * sizeof(rdpString));
 
 		for (i = 0; i < (int) count; i++)
 		{
-			freerdp_string_read_length32(s, &redirection->targetNetAddresses[i], rdp->settings->uniconv);
+			freerdp_string_read_length32(s, &redirection->targetNetAddresses[i]);
 			DEBUG_REDIR("targetNetAddresses: %s", (&redirection->targetNetAddresses[i])->ascii);
 		}
 	}
@@ -160,23 +159,23 @@ boolean rdp_recv_server_redirection_pdu(rdpRdp* rdp, STREAM* s)
 	stream_seek(s, 8); /* pad (8 bytes) */
 
 	if (redirection->flags & LB_NOREDIRECT)
-		return true;
+		return TRUE;
 	else
 		return rdp_client_redirect(rdp);
 }
 
-boolean rdp_recv_redirection_packet(rdpRdp* rdp, STREAM* s)
+BOOL rdp_recv_redirection_packet(rdpRdp* rdp, STREAM* s)
 {
 	rdp_recv_server_redirection_pdu(rdp, s);
-	return true;
+	return TRUE;
 }
 
-boolean rdp_recv_enhanced_security_redirection_packet(rdpRdp* rdp, STREAM* s)
+BOOL rdp_recv_enhanced_security_redirection_packet(rdpRdp* rdp, STREAM* s)
 {
-	stream_seek_uint16(s); /* pad2Octets (2 bytes) */
+	stream_seek_UINT16(s); /* pad2Octets (2 bytes) */
 	rdp_recv_server_redirection_pdu(rdp, s);
-	stream_seek_uint8(s); /* pad2Octets (1 byte) */
-	return true;
+	stream_seek_BYTE(s); /* pad2Octets (1 byte) */
+	return TRUE;
 }
 
 rdpRedirection* redirection_new()
@@ -200,11 +199,15 @@ void redirection_free(rdpRedirection* redirection)
 		freerdp_string_free(&redirection->tsvUrl);
 		freerdp_string_free(&redirection->username);
 		freerdp_string_free(&redirection->domain);
-		freerdp_blob_free(&redirection->password_cookie);
 		freerdp_string_free(&redirection->targetFQDN);
 		freerdp_string_free(&redirection->targetNetBiosName);
 		freerdp_string_free(&redirection->targetNetAddress);
-		freerdp_blob_free(&redirection->loadBalanceInfo);
+
+		if (redirection->LoadBalanceInfo)
+			free(redirection->LoadBalanceInfo);
+
+		if (redirection->PasswordCookie)
+			free(redirection->PasswordCookie);
 
 		if (redirection->targetNetAddresses != NULL)
 		{
@@ -213,10 +216,10 @@ void redirection_free(rdpRedirection* redirection)
 			for (i = 0; i < (int) redirection->targetNetAddressesCount; i++)
 				freerdp_string_free(&redirection->targetNetAddresses[i]);
 
-			xfree(redirection->targetNetAddresses);
+			free(redirection->targetNetAddresses);
 		}
 
-		xfree(redirection);
+		free(redirection);
 	}
 }
 

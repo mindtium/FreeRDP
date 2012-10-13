@@ -1,9 +1,7 @@
-# FreeRDP: A Remote Desktop Protocol Client
+# FreeRDP: A Remote Desktop Protocol Implementation
 # FreeRDP cmake build script
 #
-# Copyright 2011 O.S. Systems Software Ltda.
-# Copyright 2011 Otavio Salvador <otavio@ossystems.com.br>
-# Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
+# Copyright 2012 Marc-Andre Moreau <marcandre.moreau@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,36 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(RDPDR_SRCS
-	rdpdr_constants.h
-	rdpdr_types.h
-	rdpdr_capabilities.c
-	rdpdr_capabilities.h
-	devman.c
-	devman.h
-	irp.c
-	irp.h
-	rdpdr_main.c
-	rdpdr_main.h)
+set(MODULE_NAME "rdpdr")
+set(MODULE_PREFIX "CHANNEL_RDPDR")
 
-add_library(rdpdr ${RDPDR_SRCS})
-set_target_properties(rdpdr PROPERTIES PREFIX "")
-
-if(WITH_MONOLITHIC_BUILD)
-	target_link_libraries(rdpdr freerdp)
-else()
-	target_link_libraries(rdpdr freerdp-utils)
+if(WITH_CLIENT_CHANNELS)
+	add_subdirectory(client)
+	if(${MODULE_PREFIX}_CLIENT_STATIC)
+		set(CHANNEL_STATIC_CLIENT_MODULES ${CHANNEL_STATIC_CLIENT_MODULES} ${MODULE_PREFIX} PARENT_SCOPE)
+		set(${MODULE_PREFIX}_CLIENT_NAME ${${MODULE_PREFIX}_CLIENT_NAME} PARENT_SCOPE)
+		set(${MODULE_PREFIX}_CLIENT_ENTRY ${${MODULE_PREFIX}_CLIENT_ENTRY} PARENT_SCOPE)
+	endif()
 endif()
 
-install(TARGETS rdpdr DESTINATION ${FREERDP_PLUGIN_PATH})
-
-if(NOT WIN32)
-	add_subdirectory(disk)
-	add_subdirectory(printer)
-	add_subdirectory(parallel)
-	add_subdirectory(serial)
-endif()
-
-if(WITH_PCSC)
-	add_subdirectory(smartcard)
-endif()

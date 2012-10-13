@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol client.
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * Thread Utils
  *
  * Copyright 2011 Vic Lee
@@ -43,7 +43,7 @@ freerdp_thread* freerdp_thread_new(void)
 	freerdp_thread* thread;
 
 	thread = xnew(freerdp_thread);
-	thread->mutex = freerdp_mutex_new();
+	thread->mutex = CreateMutex(NULL, FALSE, NULL);
 	thread->signals[0] = wait_obj_new();
 	thread->signals[1] = wait_obj_new();
 	thread->num_signals = 2;
@@ -57,11 +57,7 @@ void freerdp_thread_start(freerdp_thread* thread, void* func, void* arg)
 
 #ifdef _WIN32
 	{
-#	ifdef _MSC_VER
-		CloseHandle((HANDLE)_beginthreadex(NULL, 0, func, arg, 0, NULL));
-#else
-		CloseHandle(CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)func, arg, 0, NULL));
-#endif
+		CloseHandle(CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL));
 	}
 #else
 	{
@@ -91,10 +87,11 @@ void freerdp_thread_free(freerdp_thread* thread)
 
 	for (i = 0; i < thread->num_signals; i++)
 		wait_obj_free(thread->signals[i]);
+
 	thread->num_signals = 0;
 
-	freerdp_mutex_free(thread->mutex);
+	CloseHandle(thread->mutex);
 	thread->mutex = NULL;
 
-	xfree(thread);
+	free(thread);
 }

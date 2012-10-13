@@ -23,6 +23,10 @@
 
 #include "keyboard_xkbfile.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <freerdp/locale/keyboard.h>
 #include <freerdp/utils/memory.h>
 
@@ -151,7 +155,10 @@ XKB_KEY_NAME_SCANCODE XKB_KEY_NAME_SCANCODE_TABLE[] =
 	{ "KPDV",	RDP_SCANCODE_DIVIDE}, // KP!
 	{ "RCTL",	RDP_SCANCODE_RCONTROL},
 	{ "RALT",	RDP_SCANCODE_RMENU},
-	{ "AE13",	RDP_SCANCODE_BACKSLASH_JP} // JP
+	{ "AE13",	RDP_SCANCODE_BACKSLASH_JP}, // JP
+	{ "HKTG",       RDP_SCANCODE_HIRAGANA}, // JP
+	{ "HENK",       RDP_SCANCODE_CONVERT_JP}, // JP
+	{ "MUHE",       RDP_SCANCODE_NONCONVERT_JP} // JP
 /*	{ "LVL3",	0x54} */
 };
 
@@ -172,7 +179,7 @@ void* freerdp_keyboard_xkb_init()
 	return (void*) display;
 }
 
-uint32 freerdp_keyboard_init_xkbfile(uint32 keyboardLayoutId, RDP_SCANCODE x11_keycode_to_rdp_scancode[256])
+UINT32 freerdp_keyboard_init_xkbfile(UINT32 keyboardLayoutId, RDP_SCANCODE x11_keycode_to_rdp_scancode[256])
 {
 	void* display;
 	memset(x11_keycode_to_rdp_scancode, 0, sizeof(x11_keycode_to_rdp_scancode));
@@ -220,12 +227,12 @@ static char* comma_substring(char* s, int n)
 	return s;
 }
 
-uint32 detect_keyboard_layout_from_xkbfile(void* display)
+UINT32 detect_keyboard_layout_from_xkbfile(void* display)
 {
 	char* layout;
 	char* variant;
-	uint32 group = 0;
-	uint32 keyboard_layout = 0;
+	UINT32 group = 0;
+	UINT32 keyboard_layout = 0;
 	XkbRF_VarDefsRec rules_names;
 	XKeyboardState coreKbdState;
 	XkbStateRec state;
@@ -252,10 +259,10 @@ uint32 detect_keyboard_layout_from_xkbfile(void* display)
 
 		keyboard_layout = find_keyboard_layout_in_xorg_rules(layout, variant);
 
-		xfree(rules_names.model);
-		xfree(rules_names.layout);
-		xfree(rules_names.variant);
-		xfree(rules_names.options);
+		free(rules_names.model);
+		free(rules_names.layout);
+		free(rules_names.variant);
+		free(rules_names.options);
 	}
 
 	return keyboard_layout;
@@ -264,9 +271,9 @@ uint32 detect_keyboard_layout_from_xkbfile(void* display)
 int freerdp_keyboard_load_map_from_xkbfile(void* display, RDP_SCANCODE x11_keycode_to_rdp_scancode[256])
 {
 	int i, j;
-	boolean found;
+	BOOL found;
 	XkbDescPtr xkb;
-	boolean status = false;
+	BOOL status = FALSE;
 
 	if (display && (xkb = XkbGetMap(display, 0, XkbUseCoreKbd)))
 	{
@@ -276,7 +283,7 @@ int freerdp_keyboard_load_map_from_xkbfile(void* display, RDP_SCANCODE x11_keyco
 
 			for (i = xkb->min_key_code; i <= xkb->max_key_code; i++)
 			{
-				found = false;
+				found = FALSE;
 				memcpy(xkb_keyname, xkb->names->keys[i].name, 4);
 
 				if (strlen(xkb_keyname) < 1)
@@ -296,7 +303,7 @@ int freerdp_keyboard_load_map_from_xkbfile(void* display, RDP_SCANCODE x11_keyco
 						}
 
 						x11_keycode_to_rdp_scancode[i] = XKB_KEY_NAME_SCANCODE_TABLE[j].rdp_scancode;
-						found = true;
+						found = TRUE;
 					}
 				}
 
@@ -306,7 +313,7 @@ int freerdp_keyboard_load_map_from_xkbfile(void* display, RDP_SCANCODE x11_keyco
 				}
 			}
 
-			status = true;
+			status = TRUE;
 		}
 
 		XkbFreeKeyboard(xkb, 0, 1);

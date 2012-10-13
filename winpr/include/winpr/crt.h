@@ -29,4 +29,32 @@
 #include <winpr/string.h>
 #include <winpr/memory.h>
 
+/* Data Alignment */
+
+#ifndef _WIN32
+
+#ifndef _ERRNO_T_DEFINED
+#define _ERRNO_T_DEFINED
+typedef int errno_t;
+#endif
+
+WINPR_API void* _aligned_malloc(size_t size, size_t alignment);
+WINPR_API void* _aligned_realloc(void* memblock, size_t size, size_t alignment);
+WINPR_API void* _aligned_recalloc(void* memblock, size_t num, size_t size, size_t alignment);
+
+WINPR_API void* _aligned_offset_malloc(size_t size, size_t alignment, size_t offset);
+WINPR_API void* _aligned_offset_realloc(void* memblock, size_t size, size_t alignment, size_t offset);
+WINPR_API void* _aligned_offset_recalloc(void* memblock, size_t num, size_t size, size_t alignment, size_t offset);
+
+WINPR_API size_t _aligned_msize(void* memblock, size_t alignment, size_t offset);
+
+WINPR_API void _aligned_free(void* memblock);
+
+/* Buffer Manipulation */
+
+WINPR_API errno_t memmove_s(void* dest, size_t numberOfElements, const void* src, size_t count);
+WINPR_API errno_t wmemmove_s(WCHAR* dest, size_t numberOfElements, const WCHAR* src, size_t count);
+
+#endif
+
 #endif /* WINPR_CRT_H */

@@ -9,8 +9,10 @@
 #define GIT_REVISION "${GIT_REVISION}"
 
 #define FREERDP_DATA_PATH "${FREERDP_DATA_PATH}"
-#define FREERDP_PLUGIN_PATH "${FREERDP_PLUGIN_PATH}"
 #define FREERDP_KEYMAP_PATH "${FREERDP_KEYMAP_PATH}"
+#define FREERDP_PLUGIN_PATH "${FREERDP_PLUGIN_PATH}"
+#define FREERDP_CLIENT_PLUGIN_PATH "${FREERDP_CLIENT_PLUGIN_PATH}"
+#define FREERDP_SERVER_PLUGIN_PATH "${FREERDP_SERVER_PLUGIN_PATH}"
 
 /* Include files */
 #cmakedefine HAVE_FCNTL_H
@@ -25,12 +27,19 @@
 
 #cmakedefine HAVE_TM_GMTOFF
 
+
 /* Options */
 #cmakedefine WITH_PROFILER
 #cmakedefine WITH_SSE2
 #cmakedefine WITH_NEON
 #cmakedefine WITH_NATIVE_SSPI
 #cmakedefine WITH_JPEG
+#cmakedefine WITH_WIN8
+
+/* Plugins */
+#cmakedefine STATIC_CHANNELS
+#cmakedefine WITH_RDPDR
+
 
 /* Debug */
 #cmakedefine WITH_DEBUG_CERTIFICATE

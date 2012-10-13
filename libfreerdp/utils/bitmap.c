@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol Client
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * Bitmap File Format Utils
  *
  * Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
@@ -30,38 +30,38 @@
 
 typedef struct
 {
-	uint8 magic[2];
-} bmpfile_magic;
+	BYTE magic[2];
+} BITMAP_MAGIC;
 
 typedef struct
 {
-	uint32 filesz;
-	uint16 creator1;
-	uint16 creator2;
-	uint32 bmp_offset;
-} bmpfile_header;
+	UINT32 filesz;
+	UINT16 creator1;
+	UINT16 creator2;
+	UINT32 bmp_offset;
+} BITMAP_CORE_HEADER;
 
 typedef struct
 {
-	uint32 header_sz;
-	sint32 width;
-	sint32 height;
-	uint16 nplanes;
-	uint16 bitspp;
-	uint32 compress_type;
-	uint32 bmp_bytesz;
-	sint32 hres;
-	sint32 vres;
-	uint32 ncolors;
-	uint32 nimpcolors;
-} BITMAPINFOHEADER;
+	UINT32 header_sz;
+	INT32 width;
+	INT32 height;
+	UINT16 nplanes;
+	UINT16 bitspp;
+	UINT32 compress_type;
+	UINT32 bmp_bytesz;
+	INT32 hres;
+	INT32 vres;
+	UINT32 ncolors;
+	UINT32 nimpcolors;
+} BITMAP_INFO_HEADER;
 
 void freerdp_bitmap_write(char* filename, void* data, int width, int height, int bpp)
 {
 	FILE* fp;
-	bmpfile_magic magic;
-	bmpfile_header header;
-	BITMAPINFOHEADER info_header;
+	BITMAP_MAGIC magic;
+	BITMAP_CORE_HEADER header;
+	BITMAP_INFO_HEADER info_header;
 
 	fp = fopen(filename, "w+b");
 
@@ -78,9 +78,9 @@ void freerdp_bitmap_write(char* filename, void* data, int width, int height, int
 	header.creator2 = 0;
 
 	header.bmp_offset =
-			sizeof(bmpfile_magic) +
-			sizeof(bmpfile_header) +
-			sizeof(BITMAPINFOHEADER);
+			sizeof(BITMAP_MAGIC) +
+			sizeof(BITMAP_CORE_HEADER) +
+			sizeof(BITMAP_INFO_HEADER);
 
 	info_header.bmp_bytesz = width * height * (bpp / 8);
 
@@ -97,11 +97,11 @@ void freerdp_bitmap_write(char* filename, void* data, int width, int height, int
 	info_header.vres = height;
 	info_header.ncolors = 0;
 	info_header.nimpcolors = 0;
-	info_header.header_sz = sizeof(BITMAPINFOHEADER);
+	info_header.header_sz = sizeof(BITMAP_INFO_HEADER);
 
-	fwrite((void*) &magic, sizeof(bmpfile_magic), 1, fp);
-	fwrite((void*) &header, sizeof(bmpfile_header), 1, fp);
-	fwrite((void*) &info_header, sizeof(BITMAPINFOHEADER), 1, fp);
+	fwrite((void*) &magic, sizeof(BITMAP_MAGIC), 1, fp);
+	fwrite((void*) &header, sizeof(BITMAP_CORE_HEADER), 1, fp);
+	fwrite((void*) &info_header, sizeof(BITMAP_INFO_HEADER), 1, fp);
 	fwrite((void*) data, info_header.bmp_bytesz, 1, fp);
 
 	fclose(fp);

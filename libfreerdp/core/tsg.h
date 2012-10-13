@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol Client
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * Terminal Server Gateway (TSG)
  *
  * Copyright 2012 Fujitsu Technology Solutions GmbH
@@ -28,6 +28,7 @@ typedef struct rdp_tsg rdpTsg;
 
 #include <winpr/rpc.h>
 #include <winpr/winpr.h>
+#include <winpr/wtypes.h>
 
 #include <time.h>
 #include <freerdp/types.h>
@@ -41,8 +42,8 @@ struct rdp_tsg
 	rdpRpc* rpc;
 	rdpSettings* settings;
 	rdpTransport* transport;
-	uint8 TunnelContext[16];
-	uint8 ChannelContext[16];
+	BYTE TunnelContext[16];
+	BYTE ChannelContext[16];
 };
 
 typedef wchar_t* RESOURCENAME;
@@ -238,34 +239,12 @@ typedef struct _TSG_PACKET
 	TSG_PACKET_TYPE_UNION tsgPacket;
 } TSG_PACKET, *PTSG_PACKET;
 
-void Opnum0NotUsedOnWire(handle_t IDL_handle);
+DWORD TsProxySendToServer(handle_t IDL_handle, byte pRpcMessage[], UINT32 count, UINT32* lengths);
 
-HRESULT TsProxyCreateTunnel(PTSG_PACKET tsgPacket, PTSG_PACKET* tsgPacketResponse,
-		PTUNNEL_CONTEXT_HANDLE_SERIALIZE* tunnelContext, unsigned long* tunnelId);
+BOOL tsg_connect(rdpTsg* tsg, const char* hostname, UINT16 port);
 
-HRESULT TsProxyAuthorizeTunnel(PTUNNEL_CONTEXT_HANDLE_NOSERIALIZE tunnelContext,
-		PTSG_PACKET tsgPacket, PTSG_PACKET* tsgPacketResponse);
-
-HRESULT TsProxyMakeTunnelCall(PTUNNEL_CONTEXT_HANDLE_NOSERIALIZE tunnelContext,
-		unsigned long procId, PTSG_PACKET tsgPacket, PTSG_PACKET* tsgPacketResponse);
-
-HRESULT TsProxyCreateChannel(PTUNNEL_CONTEXT_HANDLE_NOSERIALIZE tunnelContext,
-		PTSENDPOINTINFO tsEndPointInfo, PCHANNEL_CONTEXT_HANDLE_SERIALIZE* channelContext, unsigned long* channelId);
-
-void Opnum5NotUsedOnWire(handle_t IDL_handle);
-
-HRESULT TsProxyCloseChannel(PCHANNEL_CONTEXT_HANDLE_NOSERIALIZE* context);
-
-HRESULT TsProxyCloseTunnel(PTUNNEL_CONTEXT_HANDLE_SERIALIZE* context);
-
-DWORD TsProxySetupReceivePipe(handle_t IDL_handle, byte pRpcMessage[]);
-
-DWORD TsProxySendToServer(handle_t IDL_handle, byte pRpcMessage[], uint32 count, uint32* lengths);
-
-boolean tsg_connect(rdpTsg* tsg, const char* hostname, uint16 port);
-
-int tsg_write(rdpTsg* tsg, uint8* data, uint32 length);
-int tsg_read(rdpTsg* tsg, uint8* data, uint32 length);
+int tsg_write(rdpTsg* tsg, BYTE* data, UINT32 length);
+int tsg_read(rdpTsg* tsg, BYTE* data, UINT32 length);
 
 rdpTsg* tsg_new(rdpTransport* transport);
 void tsg_free(rdpTsg* tsg);

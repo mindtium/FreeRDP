@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol Client
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * Input Interface API
  *
  * Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
@@ -24,7 +24,7 @@ typedef struct rdp_input rdpInput;
 
 #include <freerdp/api.h>
 #include <freerdp/freerdp.h>
-#include <freerdp/keyboard_scancode.h>
+#include <freerdp/scancode.h>
 
 /* keyboard Flags */
 #define KBD_FLAGS_EXTENDED		0x0100
@@ -54,36 +54,31 @@ typedef struct rdp_input rdpInput;
 
 #define RDP_CLIENT_INPUT_PDU_HEADER_LENGTH	4
 
-typedef void (*pSynchronizeEvent)(rdpInput* input, uint32 flags);
-typedef void (*pKeyboardEvent)(rdpInput* input, uint16 flags, uint16 code);
-typedef void (*pUnicodeKeyboardEvent)(rdpInput* input, uint16 flags, uint16 code);
-typedef void (*pMouseEvent)(rdpInput* input, uint16 flags, uint16 x, uint16 y);
-typedef void (*pExtendedMouseEvent)(rdpInput* input, uint16 flags, uint16 x, uint16 y);
+typedef void (*pSynchronizeEvent)(rdpInput* input, UINT32 flags);
+typedef void (*pKeyboardEvent)(rdpInput* input, UINT16 flags, UINT16 code);
+typedef void (*pUnicodeKeyboardEvent)(rdpInput* input, UINT16 flags, UINT16 code);
+typedef void (*pMouseEvent)(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
+typedef void (*pExtendedMouseEvent)(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
 
 struct rdp_input
 {
 	rdpContext* context; /* 0 */
 	void* param1; /* 1 */
-	uint32 paddingA[16 - 2]; /* 2 */
+	UINT32 paddingA[16 - 2]; /* 2 */
 
 	pSynchronizeEvent SynchronizeEvent; /* 16 */
 	pKeyboardEvent KeyboardEvent; /* 17 */
 	pUnicodeKeyboardEvent UnicodeKeyboardEvent; /* 18 */
 	pMouseEvent MouseEvent; /* 19 */
 	pExtendedMouseEvent ExtendedMouseEvent; /* 20 */
-	uint32 paddingB[32 - 21]; /* 21 */
+	UINT32 paddingB[32 - 21]; /* 21 */
 };
 
-FREERDP_API void freerdp_input_send_synchronize_event(rdpInput* input, uint32 flags);
-FREERDP_API void freerdp_input_send_keyboard_event(rdpInput* input, uint16 flags, uint16 code);
-FREERDP_API void freerdp_input_send_unicode_keyboard_event(rdpInput* input, uint16 flags, uint16 code);
-FREERDP_API void freerdp_input_send_mouse_event(rdpInput* input, uint16 flags, uint16 x, uint16 y);
-FREERDP_API void freerdp_input_send_extended_mouse_event(rdpInput* input, uint16 flags, uint16 x, uint16 y);
-
-#define freerdp_input_send_keyboard_event_2(input, down, rdp_scancode) \
-		freerdp_input_send_keyboard_event(input, \
-			(rdp_scancode_extended(rdp_scancode) ? KBD_FLAGS_EXTENDED : 0) | \
-			((down) ? KBD_FLAGS_DOWN : KBD_FLAGS_RELEASE), \
-			rdp_scancode_code(rdp_scancode))
+FREERDP_API void freerdp_input_send_synchronize_event(rdpInput* input, UINT32 flags);
+FREERDP_API void freerdp_input_send_keyboard_event(rdpInput* input, UINT16 flags, UINT16 code);
+FREERDP_API void freerdp_input_send_keyboard_event_ex(rdpInput* input, BOOL down, UINT32 rdp_scancode);
+FREERDP_API void freerdp_input_send_unicode_keyboard_event(rdpInput* input, UINT16 flags, UINT16 code);
+FREERDP_API void freerdp_input_send_mouse_event(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
+FREERDP_API void freerdp_input_send_extended_mouse_event(rdpInput* input, UINT16 flags, UINT16 x, UINT16 y);
 
 #endif /* __INPUT_API_H */

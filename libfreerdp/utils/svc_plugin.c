@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol client.
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * Static Virtual Channel Interface
  *
  * Copyright 2009-2011 Jay Sorg
@@ -28,7 +28,6 @@
 
 #include <freerdp/constants.h>
 #include <freerdp/utils/memory.h>
-#include <freerdp/utils/mutex.h>
 #include <freerdp/utils/debug.h>
 #include <freerdp/utils/stream.h>
 #include <freerdp/utils/list.h>
@@ -38,6 +37,7 @@
 
 /* The list of all plugin instances. */
 typedef struct rdp_svc_plugin_list rdpSvcPluginList;
+
 struct rdp_svc_plugin_list
 {
 	rdpSvcPlugin* plugin;
@@ -47,7 +47,7 @@ struct rdp_svc_plugin_list
 static rdpSvcPluginList* g_svc_plugin_list = NULL;
 
 /* For locking the global resources */
-static freerdp_mutex g_mutex = NULL;
+static HANDLE g_mutex = NULL;
 
 /* Queue for receiving packets */
 struct _svc_data_in_item
@@ -69,13 +69,13 @@ static void svc_data_in_item_free(svc_data_in_item* item)
 		freerdp_event_free(item->event_in);
 		item->event_in = NULL;
 	}
-	xfree(item);
+	free(item);
 }
 
 struct rdp_svc_plugin_private
 {
 	void* init_handle;
-	uint32 open_handle;
+	UINT32 open_handle;
 	STREAM* data_in;
 
 	LIST* data_in_list;
@@ -84,39 +84,46 @@ struct rdp_svc_plugin_private
 
 static rdpSvcPlugin* svc_plugin_find_by_init_handle(void* init_handle)
 {
-	rdpSvcPluginList * list;
-	rdpSvcPlugin * plugin;
+	rdpSvcPluginList* list;
+	rdpSvcPlugin* plugin;
 
-	freerdp_mutex_lock(g_mutex);
+	WaitForSingleObject(g_mutex, INFINITE);
+
 	for (list = g_svc_plugin_list; list; list = list->next)
 	{
 		plugin = list->plugin;
+
 		if (plugin->priv->init_handle == init_handle)
 		{
-			freerdp_mutex_unlock(g_mutex);
+			ReleaseMutex(g_mutex);
 			return plugin;
 		}
 	}
-	freerdp_mutex_unlock(g_mutex);
+
+	ReleaseMutex(g_mutex);
+
 	return NULL;
 }
 
-static rdpSvcPlugin* svc_plugin_find_by_open_handle(uint32 open_handle)
+static rdpSvcPlugin* svc_plugin_find_by_open_handle(UINT32 open_handle)
 {
 	rdpSvcPluginList * list;
 	rdpSvcPlugin * plugin;
 
-	freerdp_mutex_lock(g_mutex);
+	WaitForSingleObject(g_mutex, INFINITE);
+
 	for (list = g_svc_plugin_list; list; list = list->next)
 	{
 		plugin = list->plugin;
+
 		if (plugin->priv->open_handle == open_handle)
 		{
-			freerdp_mutex_unlock(g_mutex);
+			ReleaseMutex(g_mutex);
 			return plugin;
 		}
 	}
-	freerdp_mutex_unlock(g_mutex);
+	ReleaseMutex(g_mutex);
+
 	return NULL;
 }
 
@@ -126,7 +133,7 @@ static void svc_plugin_remove(rdpSvcPlugin* plugin)
 	rdpSvcPluginList* prev;
 
 	/* Remove from global list */
-	freerdp_mutex_lock(g_mutex);
+	WaitForSingleObject(g_mutex, INFINITE);
 	for (prev = NULL, list = g_svc_plugin_list; list; prev = list, list = list->next)
 	{
 		if (list->plugin == plugin)
@@ -138,13 +145,13 @@ static void svc_plugin_remove(rdpSvcPlugin* plugin)
 			prev->next = list->next;
 		else
 			g_svc_plugin_list = list->next;
-		xfree(list);
+		free(list);
 	}
-	freerdp_mutex_unlock(g_mutex);
+	ReleaseMutex(g_mutex);
 }
 
-static void svc_plugin_process_received(rdpSvcPlugin* plugin, void* pData, uint32 dataLength,
-	uint32 totalLength, uint32 dataFlags)
+static void svc_plugin_process_received(rdpSvcPlugin* plugin, void* pData, UINT32 dataLength,
+	UINT32 totalLength, UINT32 dataFlags)
 {
 	STREAM* data_in;
 	svc_data_in_item* item;
@@ -204,30 +211,34 @@ static void svc_plugin_process_event(rdpSvcPlugin* plugin, RDP_EVENT* event_in)
 	freerdp_thread_signal(plugin->priv->thread);
 }
 
-static void svc_plugin_open_event(uint32 openHandle, uint32 event, void* pData, uint32 dataLength,
-	uint32 totalLength, uint32 dataFlags)
+static void svc_plugin_open_event(UINT32 openHandle, UINT32 event, void* pData, UINT32 dataLength,
+	UINT32 totalLength, UINT32 dataFlags)
 {
 	rdpSvcPlugin* plugin;
 
 	DEBUG_SVC("openHandle %d event %d dataLength %d totalLength %d dataFlags %d",
 		openHandle, event, dataLength, totalLength, dataFlags);
 
-	plugin = (rdpSvcPlugin*)svc_plugin_find_by_open_handle(openHandle);
+	plugin = (rdpSvcPlugin*) svc_plugin_find_by_open_handle(openHandle);
+
 	if (plugin == NULL)
 	{
 		printf("svc_plugin_open_event: error no match\n");
 		return;
 	}
+
 	switch (event)
 	{
 		case CHANNEL_EVENT_DATA_RECEIVED:
 			svc_plugin_process_received(plugin, pData, dataLength, totalLength, dataFlags);
 			break;
+
 		case CHANNEL_EVENT_WRITE_COMPLETE:
-			stream_free((STREAM*)pData);
+			stream_free((STREAM*) pData);
 			break;
+
 		case CHANNEL_EVENT_USER:
-			svc_plugin_process_event(plugin, (RDP_EVENT*)pData);
+			svc_plugin_process_event(plugin, (RDP_EVENT*) pData);
 			break;
 	}
 }
@@ -253,7 +264,7 @@ static void svc_plugin_process_data_in(rdpSvcPlugin* plugin)
 				IFCALL(plugin->receive_callback, plugin, item->data_in);
 			if (item->event_in)
 				IFCALL(plugin->event_callback, plugin, item->event_in);
-			xfree(item);
+			free(item);
 		}
 		else
 			break;
@@ -292,9 +303,9 @@ static void* svc_plugin_thread_func(void* arg)
 	return 0;
 }
 
-static void svc_plugin_process_connected(rdpSvcPlugin* plugin, void* pData, uint32 dataLength)
+static void svc_plugin_process_connected(rdpSvcPlugin* plugin, void* pData, UINT32 dataLength)
 {
-	uint32 error;
+	UINT32 error;
 
 	error = plugin->channel_entry_points.pVirtualChannelOpen(plugin->priv->init_handle,
 		&plugin->priv->open_handle, plugin->channel_def.name, svc_plugin_open_event);
@@ -319,7 +330,7 @@ static void svc_plugin_process_terminated(rdpSvcPlugin* plugin)
 	freerdp_thread_free(plugin->priv->thread);
 
 	plugin->channel_entry_points.pVirtualChannelClose(plugin->priv->open_handle);
-	xfree(plugin->channel_entry_points.pExtendedData);
+	free(plugin->channel_entry_points.pExtendedData);
 
 	svc_plugin_remove(plugin);
 
@@ -332,31 +343,35 @@ static void svc_plugin_process_terminated(rdpSvcPlugin* plugin)
 		stream_free(plugin->priv->data_in);
 		plugin->priv->data_in = NULL;
 	}
-	xfree(plugin->priv);
+	free(plugin->priv);
 	plugin->priv = NULL;
 
 	IFCALL(plugin->terminate_callback, plugin);
 }
 
-static void svc_plugin_init_event(void* pInitHandle, uint32 event, void* pData, uint32 dataLength)
+static void svc_plugin_init_event(void* pInitHandle, UINT32 event, void* pData, UINT32 dataLength)
 {
 	rdpSvcPlugin* plugin;
 
 	DEBUG_SVC("event %d", event);
 
-	plugin = (rdpSvcPlugin*)svc_plugin_find_by_init_handle(pInitHandle);
-	if (plugin == NULL)
+	plugin = (rdpSvcPlugin*) svc_plugin_find_by_init_handle(pInitHandle);
+
+	if (!plugin)
 	{
 		printf("svc_plugin_init_event: error no match\n");
 		return;
 	}
+
 	switch (event)
 	{
 		case CHANNEL_EVENT_CONNECTED:
 			svc_plugin_process_connected(plugin, pData, dataLength);
 			break;
+
 		case CHANNEL_EVENT_DISCONNECTED:
 			break;
+
 		case CHANNEL_EVENT_TERMINATED:
 			svc_plugin_process_terminated(plugin);
 			break;
@@ -372,7 +387,7 @@ void svc_plugin_init(rdpSvcPlugin* plugin, CHANNEL_ENTRY_POINTS* pEntryPoints)
 	 * VirtualChannelInit at a time. So this should be safe.
 	 */
 	if (g_mutex == NULL)
-		g_mutex = freerdp_mutex_new();
+		g_mutex = CreateMutex(NULL, FALSE, NULL);
 
 	memcpy(&plugin->channel_entry_points, pEntryPoints, pEntryPoints->cbSize);
 
@@ -382,10 +397,10 @@ void svc_plugin_init(rdpSvcPlugin* plugin, CHANNEL_ENTRY_POINTS* pEntryPoints)
 	list = xnew(rdpSvcPluginList);
 	list->plugin = plugin;
 
-	freerdp_mutex_lock(g_mutex);
+	WaitForSingleObject(g_mutex, INFINITE);
 	list->next = g_svc_plugin_list;
 	g_svc_plugin_list = list;
-	freerdp_mutex_unlock(g_mutex);
+	ReleaseMutex(g_mutex);
 
 	plugin->channel_entry_points.pVirtualChannelInit(&plugin->priv->init_handle,
 		&plugin->channel_def, 1, VIRTUAL_CHANNEL_VERSION_WIN2000, svc_plugin_init_event);
@@ -393,12 +408,16 @@ void svc_plugin_init(rdpSvcPlugin* plugin, CHANNEL_ENTRY_POINTS* pEntryPoints)
 
 int svc_plugin_send(rdpSvcPlugin* plugin, STREAM* data_out)
 {
-	uint32 error = 0;
+	UINT32 error = 0;
 
-	DEBUG_SVC("length %d", stream_get_length(data_out));
+	DEBUG_SVC("length %d", (int) stream_get_length(data_out));
 
-	error = plugin->channel_entry_points.pVirtualChannelWrite(plugin->priv->open_handle,
-		stream_get_data(data_out), stream_get_length(data_out), data_out);
+	if (!plugin || !plugin->priv)
+		error = CHANNEL_RC_BAD_INIT_HANDLE;
+	else
+		error = plugin->channel_entry_points.pVirtualChannelWrite(plugin->priv->open_handle,
+			stream_get_data(data_out), stream_get_length(data_out), data_out);
+
 	if (error != CHANNEL_RC_OK)
 	{
 		stream_free(data_out);
@@ -410,7 +429,7 @@ int svc_plugin_send(rdpSvcPlugin* plugin, STREAM* data_out)
 
 int svc_plugin_send_event(rdpSvcPlugin* plugin, RDP_EVENT* event)
 {
-	uint32 error = 0;
+	UINT32 error = 0;
 
 	DEBUG_SVC("event_type %d", event->event_type);
 
@@ -421,3 +440,4 @@ int svc_plugin_send_event(rdpSvcPlugin* plugin, RDP_EVENT* event)
 
 	return error;
 }
+

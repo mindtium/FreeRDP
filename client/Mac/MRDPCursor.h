@@ -8,15 +8,13 @@
 
 #import <Cocoa/Cocoa.h>
 
-#define boolean int
-
 #include "freerdp/graphics.h"
 
 @interface MRDPCursor : NSObject
 {
 @public
     rdpPointer       *pointer;
-    uint8            *cursor_data;   // bitmapped pixel data
+    BYTE            *cursor_data;   // bitmapped pixel data
     NSBitmapImageRep *bmiRep;
     NSCursor         *nsCursor;
     NSImage          *nsImage;

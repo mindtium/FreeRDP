@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol Client
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * RDP Server Redirection
  *
  * Copyright 2011 Marc-Andre Moreau <marcandre.moreau@gmail.com>
@@ -23,7 +23,6 @@
 #include "rdp.h"
 
 #include <freerdp/freerdp.h>
-#include <freerdp/utils/blob.h>
 #include <freerdp/utils/debug.h>
 #include <freerdp/utils/stream.h>
 #include <freerdp/utils/string.h>
@@ -45,23 +44,25 @@
 
 struct rdp_redirection
 {
-	uint32 flags;
-	uint32 sessionID;
+	UINT32 flags;
+	UINT32 sessionID;
 	rdpString tsvUrl;
 	rdpString username;
 	rdpString domain;
-	rdpBlob password_cookie;
+	BYTE* PasswordCookie;
+	DWORD PasswordCookieLength;
 	rdpString targetFQDN;
-	rdpBlob loadBalanceInfo;
+	BYTE* LoadBalanceInfo;
+	DWORD LoadBalanceInfoLength;
 	rdpString targetNetBiosName;
 	rdpString targetNetAddress;
-	uint32 targetNetAddressesCount;
+	UINT32 targetNetAddressesCount;
 	rdpString* targetNetAddresses;
 };
 typedef struct rdp_redirection rdpRedirection;
 
-boolean rdp_recv_redirection_packet(rdpRdp* rdp, STREAM* s);
-boolean rdp_recv_enhanced_security_redirection_packet(rdpRdp* rdp, STREAM* s);
+BOOL rdp_recv_redirection_packet(rdpRdp* rdp, STREAM* s);
+BOOL rdp_recv_enhanced_security_redirection_packet(rdpRdp* rdp, STREAM* s);
 
 rdpRedirection* redirection_new();
 void redirection_free(rdpRedirection* redirection);

@@ -21,13 +21,17 @@
 #include "config.h"
 #endif
 
-#include <freerdp/locale/virtual_key_codes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <freerdp/locale/vkcodes.h>
 
 #include <freerdp/utils/memory.h>
 
 struct _VIRTUAL_KEY_CODE
 {
-	uint32 code; /* Windows Virtual Key Code */
+	UINT32 code; /* Windows Virtual Key Code */
 	const char* name; /* Virtual Key Code Name */
 };
 typedef struct _VIRTUAL_KEY_CODE VIRTUAL_KEY_CODE;
@@ -292,12 +296,12 @@ static const VIRTUAL_KEY_CODE VIRTUAL_KEY_CODE_TABLE[256] =
 	{ 0, "" }
 };
 
-const char* freerdp_keyboard_get_virtual_key_code_name(uint32 vkcode)
+const char* freerdp_keyboard_get_virtual_key_code_name(UINT32 vkcode)
 {
 	return VIRTUAL_KEY_CODE_TABLE[vkcode].name;
 }
 
-uint32 freerdp_keyboard_get_virtual_key_code_from_name(const char* vkcode_name)
+UINT32 freerdp_keyboard_get_virtual_key_code_from_name(const char* vkcode_name)
 {
 	int i = 0;
 	for (i = 0; i < ARRAY_SIZE(VIRTUAL_KEY_CODE_TABLE); i++)

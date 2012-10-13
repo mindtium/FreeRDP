@@ -1,5 +1,5 @@
 /**
- * FreeRDP: A Remote Desktop Protocol Client
+ * FreeRDP: A Remote Desktop Protocol Implementation
  * Implements Microsoft Point to Point Compression (MPPC) protocol
  *
  * Copyright 2011 Laxmikant Rashinkar <LK.Rashinkar@gmail.com>
@@ -21,34 +21,35 @@
 #ifndef __MPPC_H
 #define __MPPC_H
 
+#include <freerdp/api.h>
 #include <freerdp/types.h>
 
 /* Compression Types */
-#define PACKET_COMPRESSED       0x20
-#define PACKET_AT_FRONT         0x40
-#define PACKET_FLUSHED          0x80
-#define PACKET_COMPR_TYPE_8K    0x00
-#define PACKET_COMPR_TYPE_64K   0x01
-#define PACKET_COMPR_TYPE_RDP6  0x02
-#define PACKET_COMPR_TYPE_RDP61 0x03
-#define CompressionTypeMask     0x0F
+#define PACKET_COMPRESSED		0x20
+#define PACKET_AT_FRONT			0x40
+#define PACKET_FLUSHED			0x80
+#define PACKET_COMPR_TYPE_8K		0x00
+#define PACKET_COMPR_TYPE_64K		0x01
+#define PACKET_COMPR_TYPE_RDP6		0x02
+#define PACKET_COMPR_TYPE_RDP61		0x03
+#define CompressionTypeMask		0x0F
 
-#define RDP6_HISTORY_BUF_SIZE   65536
-#define RDP6_OFFSET_CACHE_SIZE  8
+#define RDP6_HISTORY_BUF_SIZE		65536
+#define RDP6_OFFSET_CACHE_SIZE		8
 
 struct rdp_mppc_dec
 {
-	uint8* history_buf;
-	uint16* offset_cache;
-	uint8* history_buf_end;
-	uint8* history_ptr;
+	BYTE* history_buf;
+	UINT16* offset_cache;
+	BYTE* history_buf_end;
+	BYTE* history_ptr;
 };
 
-FREERDP_API int decompress_rdp(struct rdp_mppc_dec* dec, uint8* cbuf, int len, int ctype, uint32* roff, uint32* rlen);
-FREERDP_API int decompress_rdp_4(struct rdp_mppc_dec* dec, uint8* cbuf, int len, int ctype, uint32* roff, uint32* rlen);
-FREERDP_API int decompress_rdp_5(struct rdp_mppc_dec* dec, uint8* cbuf, int len, int ctype, uint32* roff, uint32* rlen);
-FREERDP_API int decompress_rdp_6(struct rdp_mppc_dec* dec, uint8* cbuf, int len, int ctype, uint32* roff, uint32* rlen);
-FREERDP_API int decompress_rdp_61(struct rdp_mppc_dec* dec, uint8* cbuf, int len, int ctype, uint32* roff, uint32* rlen);
+FREERDP_API int decompress_rdp(struct rdp_mppc_dec* dec, BYTE* cbuf, int len, int ctype, UINT32* roff, UINT32* rlen);
+FREERDP_API int decompress_rdp_4(struct rdp_mppc_dec* dec, BYTE* cbuf, int len, int ctype, UINT32* roff, UINT32* rlen);
+FREERDP_API int decompress_rdp_5(struct rdp_mppc_dec* dec, BYTE* cbuf, int len, int ctype, UINT32* roff, UINT32* rlen);
+FREERDP_API int decompress_rdp_6(struct rdp_mppc_dec* dec, BYTE* cbuf, int len, int ctype, UINT32* roff, UINT32* rlen);
+FREERDP_API int decompress_rdp_61(struct rdp_mppc_dec* dec, BYTE* cbuf, int len, int ctype, UINT32* roff, UINT32* rlen);
 FREERDP_API struct rdp_mppc_dec* mppc_dec_new(void);
 FREERDP_API void mppc_dec_free(struct rdp_mppc_dec* dec);
 
