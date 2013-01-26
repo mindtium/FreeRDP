@@ -17,8 +17,8 @@
  * limitations under the License.
  */
 
-#ifndef __RFX_H
-#define __RFX_H
+#ifndef FREERDP_CODEC_REMOTEFX_H
+#define FREERDP_CODEC_REMOTEFX_H
 
 #include <freerdp/api.h>
 #include <freerdp/types.h>
@@ -101,8 +101,6 @@ struct _RFX_CONTEXT
 	BYTE quant_idx_cr;
 
 	/* routines */
-	void (*decode_ycbcr_to_rgb)(INT16* y_r_buf, INT16* cb_g_buf, INT16* cr_b_buf);
-	void (*encode_rgb_to_ycbcr)(INT16* y_r_buf, INT16* cb_g_buf, INT16* cr_b_buf);
 	void (*quantization_decode)(INT16* buffer, const UINT32* quantization_values);
 	void (*quantization_encode)(INT16* buffer, const UINT32* quantization_values);
 	void (*dwt_2d_decode)(INT16* buffer, INT16* dwt_buffer);
@@ -134,4 +132,4 @@ FREERDP_API void rfx_compose_message(RFX_CONTEXT* context, STREAM* s,
 }
 #endif
 
-#endif /* __RFX_H */
+#endif /* FREERDP_CODEC_REMOTEFX_H */

@@ -21,7 +21,7 @@
 #include "config.h"
 #endif
 
-#include <freerdp/utils/unicode.h>
+#include <winpr/crt.h>
 
 #include "timezone.h"
 
@@ -76,27 +76,28 @@ void rdp_write_system_time(STREAM* s, SYSTEM_TIME* system_time)
 
 BOOL rdp_read_client_time_zone(STREAM* s, rdpSettings* settings)
 {
-	char* str;
+	char* str = NULL;
 	TIME_ZONE_INFO* clientTimeZone;
 
 	if (stream_get_left(s) < 172)
 		return FALSE;
 
-	clientTimeZone = settings->client_time_zone;
+	clientTimeZone = settings->ClientTimeZone;
 
 	stream_read_UINT32(s, clientTimeZone->bias); /* Bias */
 
 	/* standardName (64 bytes) */
-	freerdp_UnicodeToAsciiAlloc((WCHAR*) stream_get_tail(s), &str, 64 / 2);
+	ConvertFromUnicode(CP_UTF8, 0, (WCHAR*) stream_get_tail(s), 64 / 2, &str, 0, NULL, NULL);
 	stream_seek(s, 64);
 	strncpy(clientTimeZone->standardName, str, sizeof(clientTimeZone->standardName));
 	free(str);
+	str = NULL;
 
 	rdp_read_system_time(s, &clientTimeZone->standardDate); /* StandardDate */
 	stream_read_UINT32(s, clientTimeZone->standardBias); /* StandardBias */
 
 	/* daylightName (64 bytes) */
-	freerdp_UnicodeToAsciiAlloc((WCHAR*) stream_get_tail(s), &str, 64 / 2);
+	ConvertFromUnicode(CP_UTF8, 0, (WCHAR*) stream_get_tail(s), 64 / 2, &str, 0, NULL, NULL);
 	stream_seek(s, 64);
 	strncpy(clientTimeZone->daylightName, str, sizeof(clientTimeZone->daylightName));
 	free(str);
@@ -119,17 +120,17 @@ void rdp_write_client_time_zone(STREAM* s, rdpSettings* settings)
 	UINT32 bias;
 	INT32 sbias;
 	UINT32 bias2c;
-	WCHAR* standardName;
-	WCHAR* daylightName;
+	WCHAR* standardName = NULL;
+	WCHAR* daylightName = NULL;
 	int standardNameLength;
 	int daylightNameLength;
 	TIME_ZONE_INFO* clientTimeZone;
 
-	clientTimeZone = settings->client_time_zone;
+	clientTimeZone = settings->ClientTimeZone;
 	freerdp_time_zone_detect(clientTimeZone);
 
-	standardNameLength = freerdp_AsciiToUnicodeAlloc(clientTimeZone->standardName, &standardName, 0) * 2;
-	daylightNameLength = freerdp_AsciiToUnicodeAlloc(clientTimeZone->daylightName, &daylightName, 0) * 2;
+	standardNameLength = ConvertToUnicode(CP_UTF8, 0, clientTimeZone->standardName, -1, &standardName, 0) * 2;
+	daylightNameLength = ConvertToUnicode(CP_UTF8, 0, clientTimeZone->daylightName, -1, &daylightName, 0) * 2;
 
 	if (standardNameLength > 62)
 		standardNameLength = 62;

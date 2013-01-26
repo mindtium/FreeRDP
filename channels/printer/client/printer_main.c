@@ -31,8 +31,6 @@
 #include <winpr/interlocked.h>
 
 #include <freerdp/utils/stream.h>
-#include <freerdp/utils/unicode.h>
-#include <freerdp/utils/memory.h>
 #include <freerdp/utils/thread.h>
 #include <freerdp/utils/svc_plugin.h>
 #include <freerdp/channels/rdpdr.h>
@@ -237,9 +235,9 @@ void printer_register(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints, rdpPrinter* pri
 	char* port;
 	UINT32 Flags;
 	int DriverNameLen;
-	WCHAR* DriverName;
+	WCHAR* DriverName = NULL;
 	int PrintNameLen;
-	WCHAR* PrintName;
+	WCHAR* PrintName = NULL;
 	UINT32 CachedFieldsLen;
 	BYTE* CachedPrinterConfigData;
 	PRINTER_DEVICE* printer_dev;
@@ -247,7 +245,8 @@ void printer_register(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints, rdpPrinter* pri
 	port = malloc(10);
 	snprintf(port, 10, "PRN%d", printer->id);
 
-	printer_dev = xnew(PRINTER_DEVICE);
+	printer_dev = (PRINTER_DEVICE*) malloc(sizeof(PRINTER_DEVICE));
+	ZeroMemory(printer_dev, sizeof(PRINTER_DEVICE));
 
 	printer_dev->device.type = RDPDR_DTYP_PRINT;
 	printer_dev->device.name = port;
@@ -266,8 +265,8 @@ void printer_register(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints, rdpPrinter* pri
 	if (printer->is_default)
 		Flags |= RDPDR_PRINTER_ANNOUNCE_FLAG_DEFAULTPRINTER;
 
-	DriverNameLen = freerdp_AsciiToUnicodeAlloc(printer->driver, &DriverName, 0) * 2;
-	PrintNameLen = freerdp_AsciiToUnicodeAlloc(printer->name, &PrintName, 0) * 2;
+	DriverNameLen = ConvertToUnicode(CP_UTF8, 0, printer->driver, -1, &DriverName, 0) * 2;
+	PrintNameLen = ConvertToUnicode(CP_UTF8, 0, printer->name, -1, &PrintName, 0) * 2;
 
 	printer_dev->device.data = stream_new(28 + DriverNameLen + PrintNameLen + CachedFieldsLen);
 
@@ -301,16 +300,17 @@ void printer_register(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints, rdpPrinter* pri
 }
 
 #ifdef STATIC_CHANNELS
-int printer_entry(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints)
-#else
-int DeviceServiceEntry(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints)
+#define DeviceServiceEntry	printer_DeviceServiceEntry
 #endif
+
+int DeviceServiceEntry(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints)
 {
 	int i;
 	char* name;
 	char* driver_name;
 	rdpPrinter* printer;
 	rdpPrinter** printers;
+	RDPDR_PRINTER* device;
 	rdpPrinterDriver* driver = NULL;
 
 #ifdef WITH_CUPS
@@ -326,8 +326,9 @@ int DeviceServiceEntry(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints)
 		return 1;
 	}
 
-	name = (char*) pEntryPoints->plugin_data->data[1];
-	driver_name = (char*) pEntryPoints->plugin_data->data[2];
+	device = (RDPDR_PRINTER*) pEntryPoints->device;
+	name = device->Name;
+	driver_name = device->DriverName;
 
 	if (name && name[0])
 	{

@@ -25,12 +25,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
 
+#include <winpr/crt.h>
+
 #include <freerdp/codec/nsc.h>
-#include <freerdp/utils/memory.h>
 
 #include "nsc_types.h"
 #include "nsc_encode.h"
@@ -194,7 +196,8 @@ static void nsc_context_initialize(NSC_CONTEXT* context, STREAM* s)
 	length = context->width * context->height * 4;
 	if (context->bmpdata == NULL)
 	{
-		context->bmpdata = xzalloc(length + 16);
+		context->bmpdata = malloc(length + 16);
+		ZeroMemory(context->bmpdata, length + 16);
 		context->bmpdata_length = length;
 	}
 	else if (length > context->bmpdata_length)
@@ -244,7 +247,10 @@ void nsc_context_free(NSC_CONTEXT* context)
 	for (i = 0; i < 4; i++)
 	{
 		if (context->priv->plane_buf[i])
+		{
 			free(context->priv->plane_buf[i]);
+			context->priv->plane_buf[i] = NULL;
+		}
 	}
 	if (context->bmpdata)
 		free(context->bmpdata);
@@ -257,14 +263,21 @@ void nsc_context_free(NSC_CONTEXT* context)
 
 	free(context->priv);
 	free(context);
+	context = NULL;
 }
 
 NSC_CONTEXT* nsc_context_new(void)
 {
 	NSC_CONTEXT* nsc_context;
+	UINT8 i;
 
-	nsc_context = xnew(NSC_CONTEXT);
-	nsc_context->priv = xnew(NSC_CONTEXT_PRIV);
+	nsc_context = (NSC_CONTEXT*) malloc(sizeof(NSC_CONTEXT));
+	nsc_context->priv = (NSC_CONTEXT_PRIV*) malloc(sizeof(NSC_CONTEXT_PRIV));
+	for (i=0; i < 5; ++i)
+	{
+		nsc_context->priv->plane_buf[i] = NULL;
+	}
+	nsc_context->bmpdata = NULL;
 
 	nsc_context->decode = nsc_decode;
 	nsc_context->encode = nsc_encode;

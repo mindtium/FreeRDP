@@ -16,7 +16,8 @@
 #import "freerdp/graphics.h"
 #import "freerdp/utils/event.h"
 #import "freerdp/client/cliprdr.h"
-#import "freerdp/utils/args.h"
+#import "freerdp/client/file.h"
+#import "freerdp/client/cmdline.h"
 #import "freerdp/rail/rail.h"
 #import "freerdp/rail.h"
 #import "freerdp/utils/rail.h"
@@ -71,7 +72,7 @@
     int                is_connected;   // true when connected to RDP server
 }
 
-- (void) rdpConnectEror;
+- (void) rdpConnectError;
 - (void) rdpRemoteAppError;
 - (void) saveStateInfo :(freerdp *) instance :(rdpContext *) context;
 - (void) onPasteboardTimerFired :(NSTimer *) timer;

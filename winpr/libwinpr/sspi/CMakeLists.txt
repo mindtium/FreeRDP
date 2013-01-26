@@ -33,6 +33,8 @@ set(${MODULE_PREFIX}_NEGOTIATE_SRCS
 	Negotiate/negotiate.h)
 
 set(${MODULE_PREFIX}_SCHANNEL_SRCS
+	Schannel/schannel_openssl.c
+	Schannel/schannel_openssl.h
 	Schannel/schannel.c
 	Schannel/schannel.h)
 
@@ -53,11 +55,13 @@ if(NOT WITH_NATIVE_SSPI)
 		${${MODULE_PREFIX}_SRCS})
 endif()
 
-if(MONOLITHIC_BUILD)
-	add_library(${MODULE_NAME} OBJECT ${WINPR_SSPI_SRCS})
-else()
-	add_library(${MODULE_NAME} ${WINPR_SSPI_SRCS})
+if(MSVC AND (NOT MONOLITHIC_BUILD))
+	set(${MODULE_PREFIX}_SRCS ${${MODULE_PREFIX}_SRCS} module.def)
 endif()
+
+add_complex_library(MODULE ${MODULE_NAME} TYPE "OBJECT"
+	MONOLITHIC ${MONOLITHIC_BUILD}
+	SOURCES ${${MODULE_PREFIX}_SRCS})
 
 include_directories(${ZLIB_INCLUDE_DIRS})
 include_directories(${OPENSSL_INCLUDE_DIR})
@@ -74,18 +78,10 @@ else()
 	set(${MODULE_PREFIX}_LIBS ${${MODULE_PREFIX}_LIBS} ${ZLIB_LIBRARIES})
 endif()
 
-if(MONOLITHIC_BUILD)
-	set(${MODULE_PREFIX}_LIBS ${${MODULE_PREFIX}_LIBS} winpr)
-else()
-	if (NOT WIN32)
-		set(${MODULE_PREFIX}_LIBS ${${MODULE_PREFIX}_LIBS}
-			winpr-crt
-			winpr-sysinfo
-			winpr-registry)
-	endif()
-	
-	set(${MODULE_PREFIX}_LIBS ${${MODULE_PREFIX}_LIBS} winpr-utils)
-endif()
+set_complex_link_libraries(VARIABLE ${MODULE_PREFIX}_LIBS
+	MONOLITHIC ${MONOLITHIC_BUILD} INTERNAL
+	MODULE winpr
+	MODULES winpr-crt winpr-sysinfo winpr-registry winpr-crypto winpr-utils)
 
 if(MONOLITHIC_BUILD)
 	set(WINPR_LIBS ${WINPR_LIBS} ${${MODULE_PREFIX}_LIBS} PARENT_SCOPE)

@@ -16,8 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(MODULE_NAME "tsmf")
-set(MODULE_PREFIX "CHANNEL_TSMF_CLIENT")
+define_channel_client("tsmf")
 
 set(${MODULE_PREFIX}_SRCS
 	tsmf_audio.c
@@ -37,33 +36,37 @@ set(${MODULE_PREFIX}_SRCS
 
 include_directories(..)
 
-add_library(${MODULE_NAME} ${${MODULE_PREFIX}_SRCS})
+add_channel_client_library(${MODULE_PREFIX} ${MODULE_NAME} ${CHANNEL_NAME} TRUE "DVCPluginEntry")
+
 set_target_properties(${MODULE_NAME} PROPERTIES PREFIX "")
 
-if(MONOLITHIC_BUILD)
-	target_link_libraries(${MODULE_NAME} freerdp)
-else()
-	target_link_libraries(${MODULE_NAME} freerdp-utils)
+set_complex_link_libraries(VARIABLE ${MODULE_PREFIX}_LIBS
+	MONOLITHIC ${MONOLITHIC_BUILD}
+	MODULE freerdp
+	MODULES freerdp-utils freerdp-common)
+
+target_link_libraries(${MODULE_NAME} ${${MODULE_PREFIX}_LIBS})
+
+if(NOT STATIC_CHANNELS)
+	install(TARGETS ${MODULE_NAME} DESTINATION ${FREERDP_PLUGIN_PATH})
 endif()
 
-install(TARGETS ${MODULE_NAME} DESTINATION ${FREERDP_PLUGIN_PATH})
-
-set_property(TARGET ${MODULE_NAME} PROPERTY FOLDER "Channels/${MODULE_NAME}/Client")
+set_property(TARGET ${MODULE_NAME} PROPERTY FOLDER "Channels/${CHANNEL_NAME}/Client")
 
 if(WITH_FFMPEG)
-	add_subdirectory(ffmpeg)
+	add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "ffmpeg" "decoder")
 endif()
 
 if(WITH_XRANDR)
 	if(GSTREAMER_FOUND)
-		add_subdirectory(gstreamer)
+		add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "gstreamer" "decoder")
 	endif()
 endif()
 
 if(WITH_ALSA)
-	add_subdirectory(alsa)
+	add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "alsa" "audio")
 endif()
 
-if(WITH_PULSEAUDIO)
-	add_subdirectory(pulse)
+if(WITH_PULSE)
+	add_channel_client_subsystem(${MODULE_PREFIX} ${CHANNEL_NAME} "pulse" "audio")
 endif()

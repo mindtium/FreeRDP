@@ -17,8 +17,8 @@
  * limitations under the License.
  */
 
-#ifndef __NINE_GRID_CACHE_H
-#define __NINE_GRID_CACHE_H
+#ifndef FREERDP_NINE_GRID_CACHE_H
+#define FREERDP_NINE_GRID_CACHE_H
 
 #include <freerdp/api.h>
 #include <freerdp/types.h>
@@ -52,6 +52,10 @@ struct rdp_nine_grid_cache
 	rdpSettings* settings;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 FREERDP_API void* nine_grid_cache_get(rdpNineGridCache* nine_grid, UINT32 index);
 FREERDP_API void nine_grid_cache_put(rdpNineGridCache* nine_grid, UINT32 index, void* entry);
 
@@ -60,4 +64,8 @@ FREERDP_API void nine_grid_cache_register_callbacks(rdpUpdate* update);
 FREERDP_API rdpNineGridCache* nine_grid_cache_new(rdpSettings* settings);
 FREERDP_API void nine_grid_cache_free(rdpNineGridCache* nine_grid);
 
-#endif /* __NINE_GRID_CACHE_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* FREERDP_NINE_GRID_CACHE_H */

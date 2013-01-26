@@ -1,16 +1,18 @@
 
-set(CHANNEL_TYPE "device")
-set(CHANNEL_SHORT_NAME "smartcard")
-set(CHANNEL_LONG_NAME "Smart Card Virtual Channel Extension")
-set(CHANNEL_SPECIFICATIONS "[MS-RDPESC]")
+set(OPTION_DEFAULT OFF)
+set(OPTION_CLIENT_DEFAULT OFF)
+set(OPTION_SERVER_DEFAULT OFF)
 
-string(TOUPPER "WITH_${CHANNEL_SHORT_NAME}" CHANNEL_OPTION)
-
-if(WIN32)
-	option(${CHANNEL_OPTION} "Build ${CHANNEL_SHORT_NAME}" OFF)
-elseif(WITH_PCSC)
-	option(${CHANNEL_OPTION} "Build ${CHANNEL_SHORT_NAME}" ON)
-else()
-	option(${CHANNEL_OPTION} "Build ${CHANNEL_SHORT_NAME}" OFF)
+if(WITH_PCSC)
+	set(OPTION_CLIENT_DEFAULT ON)
+	set(OPTION_SERVER_DEFAULT OFF)
 endif()
+
+define_channel_options(NAME "smartcard" TYPE "device"
+	DESCRIPTION "Smart Card Virtual Channel Extension"
+	SPECIFICATIONS "[MS-RDPESC]"
+	DEFAULT ${OPTION_DEFAULT})
+
+define_channel_client_options(${OPTION_CLIENT_DEFAULT})
+define_channel_server_options(${OPTION_SERVER_DEFAULT})
 

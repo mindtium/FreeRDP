@@ -21,6 +21,8 @@
 #include "config.h"
 #endif
 
+#include <winpr/crt.h>
+
 #include "rdp.h"
 
 #include "info.h"
@@ -75,11 +77,14 @@ static const char* const DATA_PDU_TYPE_STRINGS[] =
  * @param flags security flags
  */
 
-void rdp_read_security_header(STREAM* s, UINT16* flags)
+BOOL rdp_read_security_header(STREAM* s, UINT16* flags)
 {
 	/* Basic Security Header */
+	if(stream_get_left(s) < 4)
+		return FALSE;
 	stream_read_UINT16(s, *flags); /* flags */
 	stream_seek(s, 2); /* flagsHi (unused) */
+	return TRUE;
 }
 
 /**
@@ -98,6 +103,9 @@ void rdp_write_security_header(STREAM* s, UINT16 flags)
 
 BOOL rdp_read_share_control_header(STREAM* s, UINT16* length, UINT16* type, UINT16* channel_id)
 {
+	if(stream_get_left(s) < 2)
+		return FALSE;
+
 	/* Share Control Header */
 	stream_read_UINT16(s, *length); /* totalLength */
 
@@ -163,9 +171,12 @@ static int rdp_security_stream_init(rdpRdp* rdp, STREAM* s)
 	if (rdp->do_crypt)
 	{
 		stream_seek(s, 12);
-		if (rdp->settings->encryption_method == ENCRYPTION_METHOD_FIPS)
+
+		if (rdp->settings->EncryptionMethods == ENCRYPTION_METHOD_FIPS)
 			stream_seek(s, 4);
+
 		rdp->sec_flags |= SEC_ENCRYPT;
+
 		if (rdp->do_secure_checksum)
 			rdp->sec_flags |= SEC_SECURE_CHECKSUM;
 	}
@@ -173,6 +184,7 @@ static int rdp_security_stream_init(rdpRdp* rdp, STREAM* s)
 	{
 		stream_seek(s, 4);
 	}
+
 	return 0;
 }
 
@@ -227,7 +239,7 @@ BOOL rdp_read_header(rdpRdp* rdp, STREAM* s, UINT16* length, UINT16* channel_id)
 	UINT16 initiator;
 	enum DomainMCSPDU MCSPDU;
 
-	MCSPDU = (rdp->settings->server_mode) ? DomainMCSPDU_SendDataRequest : DomainMCSPDU_SendDataIndication;
+	MCSPDU = (rdp->settings->ServerMode) ? DomainMCSPDU_SendDataRequest : DomainMCSPDU_SendDataIndication;
 
 	if (!mcs_read_domain_mcspdu_header(s, &MCSPDU, length))
 	{
@@ -250,11 +262,14 @@ BOOL rdp_read_header(rdpRdp* rdp, STREAM* s, UINT16* length, UINT16* channel_id)
 		return TRUE;
 	}
 
+	if(stream_get_left(s) < 5)
+		return FALSE;
 	per_read_integer16(s, &initiator, MCS_BASE_CHANNEL_ID); /* initiator (UserId) */
 	per_read_integer16(s, channel_id, 0); /* channelId */
 	stream_seek(s, 1); /* dataPriority + Segmentation (0x70) */
-	per_read_length(s, length); /* userData (OCTET_STRING) */
 
+	if(!per_read_length(s, length)) /* userData (OCTET_STRING) */
+		return FALSE;
 	if (*length > stream_get_left(s))
 		return FALSE;
 
@@ -274,14 +289,15 @@ void rdp_write_header(rdpRdp* rdp, STREAM* s, UINT16 length, UINT16 channel_id)
 	int body_length;
 	enum DomainMCSPDU MCSPDU;
 
-	MCSPDU = (rdp->settings->server_mode) ? DomainMCSPDU_SendDataIndication : DomainMCSPDU_SendDataRequest;
+	MCSPDU = (rdp->settings->ServerMode) ? DomainMCSPDU_SendDataIndication : DomainMCSPDU_SendDataRequest;
 
-	if ((rdp->sec_flags & SEC_ENCRYPT) && (rdp->settings->encryption_method == ENCRYPTION_METHOD_FIPS))
+	if ((rdp->sec_flags & SEC_ENCRYPT) && (rdp->settings->EncryptionMethods == ENCRYPTION_METHOD_FIPS))
 	{
 		int pad;
 
 		body_length = length - RDP_PACKET_HEADER_MAX_LENGTH - 16;
 		pad = 8 - (body_length % 8);
+
 		if (pad != 8)
 			length += pad;
 	}
@@ -314,7 +330,7 @@ static UINT32 rdp_security_stream_out(rdpRdp* rdp, STREAM* s, int length)
 
 		if (sec_flags & SEC_ENCRYPT)
 		{
-			if (rdp->settings->encryption_method == ENCRYPTION_METHOD_FIPS)
+			if (rdp->settings->EncryptionMethods == ENCRYPTION_METHOD_FIPS)
 			{
 				data = s->p + 12;
 
@@ -363,7 +379,7 @@ static UINT32 rdp_get_sec_bytes(rdpRdp* rdp)
 	{
 		sec_bytes = 12;
 
-		if (rdp->settings->encryption_method == ENCRYPTION_METHOD_FIPS)
+		if (rdp->settings->EncryptionMethods == ENCRYPTION_METHOD_FIPS)
 			sec_bytes += 4;
 	}
 	else if (rdp->sec_flags != 0)
@@ -453,7 +469,7 @@ BOOL rdp_send_data_pdu(rdpRdp* rdp, STREAM* s, BYTE type, UINT16 channel_id)
 	stream_seek(s, sec_bytes);
 
 	rdp_write_share_control_header(s, length - sec_bytes, PDU_TYPE_DATA, channel_id);
-	rdp_write_share_data_header(s, length - sec_bytes, type, rdp->settings->share_id);
+	rdp_write_share_data_header(s, length - sec_bytes, type, rdp->settings->ShareId);
 
 	s->p = sec_hold;
 	length += rdp_security_stream_out(rdp, s, length);
@@ -465,15 +481,18 @@ BOOL rdp_send_data_pdu(rdpRdp* rdp, STREAM* s, BYTE type, UINT16 channel_id)
 	return TRUE;
 }
 
-void rdp_recv_set_error_info_data_pdu(rdpRdp* rdp, STREAM* s)
+BOOL rdp_recv_set_error_info_data_pdu(rdpRdp* rdp, STREAM* s)
 {
+	if(stream_get_left(s) < 4)
+		return FALSE;
 	stream_read_UINT32(s, rdp->errorInfo); /* errorInfo (4 bytes) */
 
 	if (rdp->errorInfo != ERRINFO_SUCCESS)
 		rdp_print_errinfo(rdp->errorInfo);
+	return TRUE;
 }
 
-BOOL rdp_recv_data_pdu(rdpRdp* rdp, STREAM* s)
+int rdp_recv_data_pdu(rdpRdp* rdp, STREAM* s)
 {
 	BYTE type;
 	UINT16 length;
@@ -484,7 +503,8 @@ BOOL rdp_recv_data_pdu(rdpRdp* rdp, STREAM* s)
 	UINT32 rlen;
 	STREAM* comp_stream;
 
-	rdp_read_share_data_header(s, &length, &type, &share_id, &compressed_type, &compressed_len);
+	if (!rdp_read_share_data_header(s, &length, &type, &share_id, &compressed_type, &compressed_len))
+		return -1;
 
 	comp_stream = s;
 
@@ -500,7 +520,7 @@ BOOL rdp_recv_data_pdu(rdpRdp* rdp, STREAM* s)
 		else
 		{
 			printf("decompress_rdp() failed\n");
-			return FALSE;
+			return -1;
 		}
 		stream_seek(s, compressed_len - 18);
 	}
@@ -508,36 +528,40 @@ BOOL rdp_recv_data_pdu(rdpRdp* rdp, STREAM* s)
 #ifdef WITH_DEBUG_RDP
 	/* if (type != DATA_PDU_TYPE_UPDATE) */
 		DEBUG_RDP("recv %s Data PDU (0x%02X), length:%d",
-				type < ARRAY_SIZE(DATA_PDU_TYPE_STRINGS) ? DATA_PDU_TYPE_STRINGS[type] : "???", type, length);
+				type < ARRAYSIZE(DATA_PDU_TYPE_STRINGS) ? DATA_PDU_TYPE_STRINGS[type] : "???", type, length);
 #endif
 
 	switch (type)
 	{
 		case DATA_PDU_TYPE_UPDATE:
 			if (!update_recv(rdp->update, comp_stream))
-				return FALSE;
+				return -1;
 			break;
 
 		case DATA_PDU_TYPE_CONTROL:
-			rdp_recv_server_control_pdu(rdp, comp_stream);
+			if (!rdp_recv_server_control_pdu(rdp, comp_stream))
+				return -1;
 			break;
 
 		case DATA_PDU_TYPE_POINTER:
-			update_recv_pointer(rdp->update, comp_stream);
+			if (!update_recv_pointer(rdp->update, comp_stream))
+				return -1;
 			break;
 
 		case DATA_PDU_TYPE_INPUT:
 			break;
 
 		case DATA_PDU_TYPE_SYNCHRONIZE:
-			rdp_recv_synchronize_pdu(rdp, comp_stream);
+			if (!rdp_recv_synchronize_pdu(rdp, comp_stream))
+				return -1;
 			break;
 
 		case DATA_PDU_TYPE_REFRESH_RECT:
 			break;
 
 		case DATA_PDU_TYPE_PLAY_SOUND:
-			update_recv_play_sound(rdp->update, comp_stream);
+			if (!update_recv_play_sound(rdp->update, comp_stream))
+				return -1;
 			break;
 
 		case DATA_PDU_TYPE_SUPPRESS_OUTPUT:
@@ -550,14 +574,16 @@ BOOL rdp_recv_data_pdu(rdpRdp* rdp, STREAM* s)
 			break;
 
 		case DATA_PDU_TYPE_SAVE_SESSION_INFO:
-			rdp_recv_save_session_info(rdp, comp_stream);
+			if(!rdp_recv_save_session_info(rdp, comp_stream))
+				return FALSE;
 			break;
 
 		case DATA_PDU_TYPE_FONT_LIST:
 			break;
 
 		case DATA_PDU_TYPE_FONT_MAP:
-			rdp_recv_font_map_pdu(rdp, comp_stream);
+			if(!rdp_recv_font_map_pdu(rdp, comp_stream))
+				return -1;
 			break;
 
 		case DATA_PDU_TYPE_SET_KEYBOARD_INDICATORS:
@@ -576,7 +602,8 @@ BOOL rdp_recv_data_pdu(rdpRdp* rdp, STREAM* s)
 			break;
 
 		case DATA_PDU_TYPE_SET_ERROR_INFO:
-			rdp_recv_set_error_info_data_pdu(rdp, comp_stream);
+			if (!rdp_recv_set_error_info_data_pdu(rdp, comp_stream))
+				return -1;
 			break;
 
 		case DATA_PDU_TYPE_DRAW_NINEGRID_ERROR:
@@ -604,7 +631,7 @@ BOOL rdp_recv_data_pdu(rdpRdp* rdp, STREAM* s)
 		stream_free(comp_stream);
 	}
 
-	return TRUE;
+	return 0;
 }
 
 BOOL rdp_recv_out_of_sequence_pdu(rdpRdp* rdp, STREAM* s)
@@ -613,16 +640,16 @@ BOOL rdp_recv_out_of_sequence_pdu(rdpRdp* rdp, STREAM* s)
 	UINT16 length;
 	UINT16 channelId;
 
-	rdp_read_share_control_header(s, &length, &type, &channelId);
+	if(!rdp_read_share_control_header(s, &length, &type, &channelId))
+		return FALSE;
 
 	if (type == PDU_TYPE_DATA)
 	{
-		return rdp_recv_data_pdu(rdp, s);
+		return (rdp_recv_data_pdu(rdp, s) < 0) ? FALSE : TRUE;
 	}
 	else if (type == PDU_TYPE_SERVER_REDIRECTION)
 	{
-		rdp_recv_enhanced_security_redirection_packet(rdp, s);
-		return TRUE;
+		return rdp_recv_enhanced_security_redirection_packet(rdp, s);
 	}
 	else
 	{
@@ -639,13 +666,17 @@ BOOL rdp_recv_out_of_sequence_pdu(rdpRdp* rdp, STREAM* s)
 
 BOOL rdp_decrypt(rdpRdp* rdp, STREAM* s, int length, UINT16 securityFlags)
 {
-	BYTE cmac[8], wmac[8];
+	BYTE cmac[8];
+	BYTE wmac[8];
 
-	if (rdp->settings->encryption_method == ENCRYPTION_METHOD_FIPS)
+	if (rdp->settings->EncryptionMethods == ENCRYPTION_METHOD_FIPS)
 	{
 		UINT16 len;
 		BYTE version, pad;
-		BYTE *sig;
+		BYTE* sig;
+
+		if (stream_get_left(s) < 12)
+			return FALSE;
 
 		stream_read_UINT16(s, len); /* 0x10 */
 		stream_read_BYTE(s, version); /* 0x1 */
@@ -673,13 +704,18 @@ BOOL rdp_decrypt(rdpRdp* rdp, STREAM* s, int length, UINT16 securityFlags)
 		return TRUE;
 	}
 
+	if (stream_get_left(s) < 8)
+		return FALSE;
+
 	stream_read(s, wmac, sizeof(wmac));
 	length -= sizeof(wmac);
 	security_decrypt(s->p, length, rdp);
+
 	if (securityFlags & SEC_SECURE_CHECKSUM)
 		security_salted_mac_signature(rdp, s->p, length, FALSE, cmac);
 	else
 		security_mac_signature(rdp, s->p, length, cmac);
+
 	if (memcmp(wmac, cmac, sizeof(wmac)) != 0)
 	{
 		printf("WARNING: invalid packet signature\n");
@@ -692,6 +728,7 @@ BOOL rdp_decrypt(rdpRdp* rdp, STREAM* s, int length, UINT16 securityFlags)
 		 */
 		//return FALSE;
 	}
+
 	return TRUE;
 }
 
@@ -701,7 +738,7 @@ BOOL rdp_decrypt(rdpRdp* rdp, STREAM* s, int length, UINT16 securityFlags)
  * @param s stream
  */
 
-static BOOL rdp_recv_tpkt_pdu(rdpRdp* rdp, STREAM* s)
+static int rdp_recv_tpkt_pdu(rdpRdp* rdp, STREAM* s)
 {
 	UINT16 length;
 	UINT16 pduType;
@@ -714,20 +751,23 @@ static BOOL rdp_recv_tpkt_pdu(rdpRdp* rdp, STREAM* s)
 	if (!rdp_read_header(rdp, s, &length, &channelId))
 	{
 		printf("Incorrect RDP header.\n");
-		return FALSE;
+		return -1;
 	}
 
-	if (rdp->settings->encryption)
+	if (rdp->settings->DisableEncryption)
 	{
-		rdp_read_security_header(s, &securityFlags);
-		if (securityFlags & (SEC_ENCRYPT|SEC_REDIRECTION_PKT))
+		if (!rdp_read_security_header(s, &securityFlags))
+			return -1;
+
+		if (securityFlags & (SEC_ENCRYPT | SEC_REDIRECTION_PKT))
 		{
 			if (!rdp_decrypt(rdp, s, length - 4, securityFlags))
 			{
 				printf("rdp_decrypt failed\n");
-				return FALSE;
+				return -1;
 			}
 		}
+
 		if (securityFlags & SEC_REDIRECTION_PKT)
 		{
 			/*
@@ -736,41 +776,46 @@ static BOOL rdp_recv_tpkt_pdu(rdpRdp* rdp, STREAM* s)
 			 */
 			s->p -= 2;
 			rdp_recv_enhanced_security_redirection_packet(rdp, s);
-			return TRUE;
+			return -1;
 		}
 	}
 
 	if (channelId != MCS_GLOBAL_CHANNEL_ID)
 	{
-		freerdp_channel_process(rdp->instance, s, channelId);
+		if (!freerdp_channel_process(rdp->instance, s, channelId))
+			return -1;
 	}
 	else
 	{
 		while (stream_get_left(s) > 3)
 		{
 			stream_get_mark(s, nextp);
-			rdp_read_share_control_header(s, &pduLength, &pduType, &pduSource);
+
+			if (!rdp_read_share_control_header(s, &pduLength, &pduType, &pduSource))
+				return -1;
+
 			nextp += pduLength;
 
-			rdp->settings->pdu_source = pduSource;
+			rdp->settings->PduSource = pduSource;
 
 			switch (pduType)
 			{
 				case PDU_TYPE_DATA:
-					if (!rdp_recv_data_pdu(rdp, s))
+					if (rdp_recv_data_pdu(rdp, s) < 0)
 					{
 						printf("rdp_recv_data_pdu failed\n");
-						return FALSE;
+						return -1;
 					}
 					break;
 
 				case PDU_TYPE_DEACTIVATE_ALL:
 					if (!rdp_recv_deactivate_all(rdp, s))
-						return FALSE;
+						return -1;
 					break;
 
 				case PDU_TYPE_SERVER_REDIRECTION:
-					rdp_recv_enhanced_security_redirection_packet(rdp, s);
+					if (!rdp_recv_enhanced_security_redirection_packet(rdp, s))
+						return -1;
 					break;
 
 				default:
@@ -781,32 +826,37 @@ static BOOL rdp_recv_tpkt_pdu(rdpRdp* rdp, STREAM* s)
 		}
 	}
 
-	return TRUE;
+	return 0;
 }
 
-static BOOL rdp_recv_fastpath_pdu(rdpRdp* rdp, STREAM* s)
+static int rdp_recv_fastpath_pdu(rdpRdp* rdp, STREAM* s)
 {
 	UINT16 length;
 	rdpFastPath* fastpath;
 
 	fastpath = rdp->fastpath;
-	length = fastpath_read_header_rdp(fastpath, s);
 
-	if (length == 0 || length > stream_get_left(s))
+	if (!fastpath_read_header_rdp(fastpath, s, &length))
+		return -1;
+
+	if ((length == 0) || (length > stream_get_left(s)))
 	{
 		printf("incorrect FastPath PDU header length %d\n", length);
-		return FALSE;
+		return -1;
 	}
 
 	if (fastpath->encryptionFlags & FASTPATH_OUTPUT_ENCRYPTED)
 	{
-		rdp_decrypt(rdp, s, length, (fastpath->encryptionFlags & FASTPATH_OUTPUT_SECURE_CHECKSUM) ? SEC_SECURE_CHECKSUM : 0);
+		UINT16 flags = (fastpath->encryptionFlags & FASTPATH_OUTPUT_SECURE_CHECKSUM) ? SEC_SECURE_CHECKSUM : 0;
+
+		if (!rdp_decrypt(rdp, s, length, flags))
+			return -1;
 	}
 
 	return fastpath_recv_updates(rdp->fastpath, s);
 }
 
-static BOOL rdp_recv_pdu(rdpRdp* rdp, STREAM* s)
+static int rdp_recv_pdu(rdpRdp* rdp, STREAM* s)
 {
 	if (tpkt_verify_header(s))
 		return rdp_recv_tpkt_pdu(rdp, s);
@@ -829,58 +879,58 @@ void rdp_recv(rdpRdp* rdp)
 	rdp_recv_pdu(rdp, s);
 }
 
-static BOOL rdp_recv_callback(rdpTransport* transport, STREAM* s, void* extra)
+static int rdp_recv_callback(rdpTransport* transport, STREAM* s, void* extra)
 {
+	int status = 0;
 	rdpRdp* rdp = (rdpRdp*) extra;
 
 	switch (rdp->state)
 	{
 		case CONNECTION_STATE_NEGO:
 			if (!rdp_client_connect_mcs_connect_response(rdp, s))
-				return FALSE;
+				status = -1;
 			break;
 
 		case CONNECTION_STATE_MCS_ATTACH_USER:
 			if (!rdp_client_connect_mcs_attach_user_confirm(rdp, s))
-				return FALSE;
+				status = -1;
 			break;
 
 		case CONNECTION_STATE_MCS_CHANNEL_JOIN:
 			if (!rdp_client_connect_mcs_channel_join_confirm(rdp, s))
-				return FALSE;
+				status = -1;
 			break;
 
 		case CONNECTION_STATE_LICENSE:
 			if (!rdp_client_connect_license(rdp, s))
-				return FALSE;
+				status = -1;
 			break;
 
 		case CONNECTION_STATE_CAPABILITY:
 			if (!rdp_client_connect_demand_active(rdp, s))
 			{
 				printf("rdp_client_connect_demand_active failed\n");
-				return FALSE;
+				status = -1;
 			}
 			break;
 
 		case CONNECTION_STATE_FINALIZATION:
-			if (!rdp_recv_pdu(rdp, s))
-				return FALSE;
-			if (rdp->finalize_sc_pdus == FINALIZE_SC_COMPLETE)
+			status = rdp_recv_pdu(rdp, s);
+			if ((status >= 0) && (rdp->finalize_sc_pdus == FINALIZE_SC_COMPLETE))
 				rdp->state = CONNECTION_STATE_ACTIVE;
 			break;
 
 		case CONNECTION_STATE_ACTIVE:
-			if (!rdp_recv_pdu(rdp, s))
-				return FALSE;
+			status = rdp_recv_pdu(rdp, s);
 			break;
 
 		default:
 			printf("Invalid state %d\n", rdp->state);
-			return FALSE;
+			status = -1;
+			break;
 	}
 
-	return TRUE;
+	return status;
 }
 
 int rdp_send_channel_data(rdpRdp* rdp, int channel_id, BYTE* data, int size)
@@ -895,8 +945,8 @@ int rdp_send_channel_data(rdpRdp* rdp, int channel_id, BYTE* data, int size)
  */
 void rdp_set_blocking_mode(rdpRdp* rdp, BOOL blocking)
 {
-	rdp->transport->recv_callback = rdp_recv_callback;
-	rdp->transport->recv_extra = rdp;
+	rdp->transport->ReceiveCallback = rdp_recv_callback;
+	rdp->transport->ReceiveExtra = rdp;
 	transport_set_blocking_mode(rdp->transport, blocking);
 }
 
@@ -914,12 +964,14 @@ rdpRdp* rdp_new(freerdp* instance)
 {
 	rdpRdp* rdp;
 
-	rdp = (rdpRdp*) xzalloc(sizeof(rdpRdp));
+	rdp = (rdpRdp*) malloc(sizeof(rdpRdp));
 
 	if (rdp != NULL)
 	{
+		ZeroMemory(rdp, sizeof(rdpRdp));
+
 		rdp->instance = instance;
-		rdp->settings = settings_new((void*) instance);
+		rdp->settings = freerdp_settings_new((void*) instance);
 
 		if (instance != NULL)
 			instance->settings = rdp->settings;
@@ -954,7 +1006,7 @@ void rdp_free(rdpRdp* rdp)
 		crypto_des3_free(rdp->fips_encrypt);
 		crypto_des3_free(rdp->fips_decrypt);
 		crypto_hmac_free(rdp->fips_hmac);
-		settings_free(rdp->settings);
+		freerdp_settings_free(rdp->settings);
 		extension_free(rdp->extension);
 		transport_free(rdp->transport);
 		license_free(rdp->license);

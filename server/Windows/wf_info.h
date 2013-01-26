@@ -22,6 +22,9 @@
 
 #include "wf_interface.h"
 
+#define WF_INFO_DEFAULT_FPS 24
+#define WF_INFO_MAXPEERS 32
+
 int wf_info_lock(wfInfo* wfi);
 int wf_info_try_lock(wfInfo* wfi, DWORD dwMilliseconds);
 int wf_info_unlock(wfInfo* wfi);
@@ -37,5 +40,6 @@ void wf_info_clear_invalid_region(wfInfo* wfi);
 void wf_info_invalidate_full_screen(wfInfo* wfi);
 BOOL wf_info_have_invalid_region(wfInfo* wfi);
 void wf_info_getScreenData(wfInfo* wfi, long* width, long* height, BYTE** pBits, int* pitch);
+BOOL CALLBACK wf_info_monEnumCB(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
 
 #endif /* WF_INFO_H */

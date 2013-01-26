@@ -53,9 +53,7 @@
 #include <freerdp/constants.h>
 #include <freerdp/utils/list.h>
 #include <freerdp/utils/thread.h>
-#include <freerdp/utils/memory.h>
 #include <freerdp/utils/stream.h>
-#include <freerdp/utils/unicode.h>
 #include <freerdp/utils/svc_plugin.h>
 #include <freerdp/channels/rdpdr.h>
 
@@ -74,7 +72,8 @@ typedef struct _PARALLEL_DEVICE PARALLEL_DEVICE;
 
 static void parallel_process_irp_create(PARALLEL_DEVICE* parallel, IRP* irp)
 {
-	char* path;
+	char* path = NULL;
+	int status;
 	UINT32 PathLength;
 
 	stream_seek(irp->input, 28);
@@ -82,7 +81,11 @@ static void parallel_process_irp_create(PARALLEL_DEVICE* parallel, IRP* irp)
 	/* SharedAccess(4) CreateDisposition(4), CreateOptions(4) */
 	stream_read_UINT32(irp->input, PathLength);
 
-	freerdp_UnicodeToAsciiAlloc((WCHAR*) stream_get_tail(irp->input), &path, PathLength / 2);
+	status = ConvertFromUnicode(CP_UTF8, 0, (WCHAR*) stream_get_tail(irp->input),
+			PathLength / 2, &path, 0, NULL, NULL);
+
+	if (status < 1)
+		path = (char*) calloc(1, 1);
 
 	parallel->id = irp->devman->id_sequence++;
 	parallel->file = open(parallel->path, O_RDWR);
@@ -307,19 +310,26 @@ static void parallel_free(DEVICE* device)
 	free(parallel);
 }
 
+#ifdef STATIC_CHANNELS
+#define DeviceServiceEntry	parallel_DeviceServiceEntry
+#endif
+
 int DeviceServiceEntry(PDEVICE_SERVICE_ENTRY_POINTS pEntryPoints)
 {
 	char* name;
 	char* path;
 	int i, length;
+	RDPDR_PARALLEL* device;
 	PARALLEL_DEVICE* parallel;
 
-	name = (char*) pEntryPoints->plugin_data->data[1];
-	path = (char*) pEntryPoints->plugin_data->data[2];
+	device = (RDPDR_PARALLEL*) pEntryPoints->device;
+	name = device->Name;
+	path = device->Path;
 
 	if (name[0] && path[0])
 	{
-		parallel = xnew(PARALLEL_DEVICE);
+		parallel = (PARALLEL_DEVICE*) malloc(sizeof(PARALLEL_DEVICE));
+		ZeroMemory(parallel, sizeof(PARALLEL_DEVICE));
 
 		parallel->device.type = RDPDR_DTYP_PARALLEL;
 		parallel->device.name = name;

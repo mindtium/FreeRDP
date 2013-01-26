@@ -32,7 +32,6 @@
 #include <freerdp/constants.h>
 #include <freerdp/codec/color.h>
 #include <freerdp/codec/bitmap.h>
-#include <freerdp/utils/memory.h>
 #include <freerdp/codec/rfx.h>
 #include <freerdp/codec/nsc.h>
 
@@ -142,7 +141,7 @@ HBRUSH wf_create_brush(wfInfo * wfi, rdpBrush* brush, UINT32 color, int bpp)
 		{
 			for (i = 0; i != 8; i++)
 				ipattern[7 - i] = brush->data[i];
-	
+
 			cdata = wf_glyph_convert(wfi, 8, 8, ipattern);
 			pattern = CreateBitmap(8, 8, 1, 1, cdata);
 			lbr.lbHatch = (ULONG_PTR) pattern;
@@ -169,18 +168,61 @@ HBRUSH wf_create_brush(wfInfo * wfi, rdpBrush* brush, UINT32 color, int bpp)
 
 void wf_invalidate_region(wfInfo* wfi, int x, int y, int width, int height)
 {
-	wfi->update_rect.left = x;
-	wfi->update_rect.top = y;
-	wfi->update_rect.right = x + width;
-	wfi->update_rect.bottom = y + height;
+	wfi->update_rect.left = x + wfi->offset_x;
+	wfi->update_rect.top = y + wfi->offset_y;
+	wfi->update_rect.right = wfi->update_rect.left + width;
+	wfi->update_rect.bottom = wfi->update_rect.top + height;
 	InvalidateRect(wfi->hwnd, &(wfi->update_rect), FALSE);
 	gdi_InvalidateRegion(wfi->hdc, x, y, width, height);
+}
+
+void wf_update_offset(wfInfo* wfi)
+{
+	if (wfi->fullscreen)
+	{
+		wfi->offset_x = (GetSystemMetrics(SM_CXSCREEN) - wfi->width) / 2;
+		if (wfi->offset_x < 0)
+			wfi->offset_x = 0;
+		wfi->offset_y = (GetSystemMetrics(SM_CYSCREEN) - wfi->height) / 2;
+		if (wfi->offset_y < 0)
+			wfi->offset_y = 0;
+	}
+	else
+	{
+		wfi->offset_x = 0;
+		wfi->offset_y = 0;
+	}
+}
+
+void wf_resize_window(wfInfo* wfi)
+{
+	if (wfi->fullscreen)
+	{
+		SetWindowLongPtr(wfi->hwnd, GWL_STYLE, WS_POPUP);
+		SetWindowPos(wfi->hwnd, HWND_TOP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), SWP_FRAMECHANGED);
+	}
+	else
+	{
+		RECT rc_client, rc_wnd;
+
+		SetWindowLongPtr(wfi->hwnd, GWL_STYLE, WS_CAPTION | WS_OVERLAPPED | WS_SYSMENU | WS_MINIMIZEBOX);
+		/* Now resize to get full canvas size and room for caption and borders */
+		SetWindowPos(wfi->hwnd, HWND_TOP, 10, 10, wfi->width, wfi->height, SWP_FRAMECHANGED);
+		GetClientRect(wfi->hwnd, &rc_client);
+		GetWindowRect(wfi->hwnd, &rc_wnd);
+		wfi->diff.x = (rc_wnd.right - rc_wnd.left) - rc_client.right;
+		wfi->diff.y = (rc_wnd.bottom - rc_wnd.top) - rc_client.bottom;
+		SetWindowPos(wfi->hwnd, HWND_TOP, -1, -1, wfi->width + wfi->diff.x, wfi->height + wfi->diff.y, SWP_NOMOVE | SWP_FRAMECHANGED);
+	}
+	wf_update_offset(wfi);
 }
 
 void wf_toggle_fullscreen(wfInfo* wfi)
 {
 	ShowWindow(wfi->hwnd, SW_HIDE);
 	wfi->fullscreen = !wfi->fullscreen;
+	wf_resize_window(wfi);
+	ShowWindow(wfi->hwnd, SW_SHOW);
 	SetForegroundWindow(wfi->hwnd);
 }
 
@@ -342,7 +384,7 @@ void wf_gdi_line_to(rdpContext* context, LINE_TO_ORDER* line_to)
 
 	wf_set_rop2(wfi->drawing->hdc, line_to->bRop2);
 	org_pen = (HPEN) SelectObject(wfi->drawing->hdc, pen);
-	
+
 	MoveToEx(wfi->drawing->hdc, line_to->nXStart, line_to->nYStart, NULL);
 	LineTo(wfi->drawing->hdc, line_to->nXEnd, line_to->nYEnd);
 
@@ -417,14 +459,16 @@ void wf_gdi_surface_bits(rdpContext* context, SURFACE_BITS_COMMAND* surface_bits
 	int tx, ty;
 	char* tile_bitmap;
 	RFX_MESSAGE* message;
+	BITMAPINFO bitmap_info;
 	wfInfo* wfi = ((wfContext*) context)->wfi;
 
 	RFX_CONTEXT* rfx_context = (RFX_CONTEXT*) wfi->rfx_context;
 	NSC_CONTEXT* nsc_context = (NSC_CONTEXT*) wfi->nsc_context;
 
-	tile_bitmap = (char*) xzalloc(32);
+	tile_bitmap = (char*) malloc(32);
+	ZeroMemory(tile_bitmap, 32);
 
-	if (surface_bits_command->codecID == CODEC_ID_REMOTEFX)
+	if (surface_bits_command->codecID == RDP_CODEC_ID_REMOTEFX)
 	{
 		message = rfx_process_message(rfx_context, surface_bits_command->bitmapData, surface_bits_command->bitmapDataLength);
 
@@ -459,50 +503,37 @@ void wf_gdi_surface_bits(rdpContext* context, SURFACE_BITS_COMMAND* surface_bits
 
 		rfx_message_free(rfx_context, message);
 	}
-	else if (surface_bits_command->codecID == CODEC_ID_NSCODEC)
+	else if (surface_bits_command->codecID == RDP_CODEC_ID_NSCODEC)
 	{
 		nsc_process_message(nsc_context, surface_bits_command->bpp, surface_bits_command->width, surface_bits_command->height,
 			surface_bits_command->bitmapData, surface_bits_command->bitmapDataLength);
-		wfi->image->_bitmap.width = surface_bits_command->width;
-		wfi->image->_bitmap.height = surface_bits_command->height;
-		wfi->image->_bitmap.bpp = surface_bits_command->bpp;
-		wfi->image->_bitmap.data = (BYTE*) realloc(wfi->image->_bitmap.data, wfi->image->_bitmap.width * wfi->image->_bitmap.height * 4);
-		freerdp_image_flip(nsc_context->bmpdata, wfi->image->_bitmap.data, wfi->image->_bitmap.width, wfi->image->_bitmap.height, 32);
-		BitBlt(wfi->primary->hdc, surface_bits_command->destLeft, surface_bits_command->destTop, surface_bits_command->width, surface_bits_command->height, wfi->image->hdc, 0, 0, GDI_SRCCOPY);
-	} 
-	else if (surface_bits_command->codecID == CODEC_ID_NONE)
+		ZeroMemory(&bitmap_info, sizeof(bitmap_info));
+		bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+		bitmap_info.bmiHeader.biWidth = surface_bits_command->width;
+		bitmap_info.bmiHeader.biHeight = surface_bits_command->height;
+		bitmap_info.bmiHeader.biPlanes = 1;
+		bitmap_info.bmiHeader.biBitCount = surface_bits_command->bpp;
+		bitmap_info.bmiHeader.biCompression = BI_RGB;
+		SetDIBitsToDevice(wfi->primary->hdc, surface_bits_command->destLeft, surface_bits_command->destTop,
+			surface_bits_command->width, surface_bits_command->height, 0, 0, 0, surface_bits_command->height,
+			nsc_context->bmpdata, &bitmap_info, DIB_RGB_COLORS);
+		wf_invalidate_region(wfi, surface_bits_command->destLeft, surface_bits_command->destTop,
+			surface_bits_command->width, surface_bits_command->height);
+	}
+	else if (surface_bits_command->codecID == RDP_CODEC_ID_NONE)
 	{
-		wfi->image->_bitmap.width = surface_bits_command->width;
-		wfi->image->_bitmap.height = surface_bits_command->height;
-		wfi->image->_bitmap.bpp = surface_bits_command->bpp;
-
-		wfi->image->_bitmap.data = (BYTE*) realloc(wfi->image->_bitmap.data,
-				wfi->image->_bitmap.width * wfi->image->_bitmap.height * 4);
-
-		if ((surface_bits_command->bpp != 32) || (wfi->clrconv->alpha == TRUE))
-		{
-			BYTE* temp_image;
-
-			freerdp_image_convert(surface_bits_command->bitmapData, wfi->image->_bitmap.data,
-				wfi->image->_bitmap.width, wfi->image->_bitmap.height,
-				wfi->image->_bitmap.bpp, 32, wfi->clrconv);
-
-			surface_bits_command->bpp = 32;
-			surface_bits_command->bitmapData = wfi->image->_bitmap.data;
-
-			temp_image = (BYTE*) malloc(wfi->image->_bitmap.width * wfi->image->_bitmap.height * 4);
-			freerdp_image_flip(wfi->image->_bitmap.data, temp_image, wfi->image->_bitmap.width, wfi->image->_bitmap.height, 32);
-			free(wfi->image->_bitmap.data);
-			wfi->image->_bitmap.data = temp_image;
-		}
-		else
-		{
-			freerdp_image_flip(surface_bits_command->bitmapData, wfi->image->_bitmap.data,
-					wfi->image->_bitmap.width, wfi->image->_bitmap.height, 32);
-		}
-
-		BitBlt(wfi->primary->hdc, surface_bits_command->destLeft, surface_bits_command->destTop,
-				surface_bits_command->width, surface_bits_command->height, wfi->image->hdc, 0, 0, SRCCOPY);
+		ZeroMemory(&bitmap_info, sizeof(bitmap_info));
+		bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+		bitmap_info.bmiHeader.biWidth = surface_bits_command->width;
+		bitmap_info.bmiHeader.biHeight = surface_bits_command->height;
+		bitmap_info.bmiHeader.biPlanes = 1;
+		bitmap_info.bmiHeader.biBitCount = surface_bits_command->bpp;
+		bitmap_info.bmiHeader.biCompression = BI_RGB;
+		SetDIBitsToDevice(wfi->primary->hdc, surface_bits_command->destLeft, surface_bits_command->destTop,
+			surface_bits_command->width, surface_bits_command->height, 0, 0, 0, surface_bits_command->height,
+			surface_bits_command->bitmapData, &bitmap_info, DIB_RGB_COLORS);
+		wf_invalidate_region(wfi, surface_bits_command->destLeft, surface_bits_command->destTop,
+			surface_bits_command->width, surface_bits_command->height);
 	}
 	else
 	{
@@ -511,6 +542,19 @@ void wf_gdi_surface_bits(rdpContext* context, SURFACE_BITS_COMMAND* surface_bits
 
 	if (tile_bitmap != NULL)
 		free(tile_bitmap);
+}
+
+void wf_gdi_surface_frame_marker(rdpContext* context, SURFACE_FRAME_MARKER* surface_frame_marker)
+{
+	wfInfo* wfi;
+	rdpSettings* settings;
+
+	wfi = ((wfContext*) context)->wfi;
+	settings = wfi->instance->settings;
+	if (surface_frame_marker->frameAction == SURFACECMD_FRAMEACTION_END && settings->FrameAcknowledge > 0)
+	{
+		IFCALL(wfi->instance->update->SurfaceFrameAcknowledge, context, surface_frame_marker->frameId);
+	}
 }
 
 void wf_gdi_register_update_callbacks(rdpUpdate* update)
@@ -544,4 +588,5 @@ void wf_gdi_register_update_callbacks(rdpUpdate* update)
 	primary->EllipseCB = NULL;
 
 	update->SurfaceBits = wf_gdi_surface_bits;
+	update->SurfaceFrameMarker = wf_gdi_surface_frame_marker;
 }

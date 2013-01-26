@@ -66,12 +66,12 @@
  * @return TPDU length indicator (LI)
  */
 
-BYTE
-tpdu_read_header(STREAM* s, BYTE* code)
+BOOL tpdu_read_header(STREAM* s, BYTE* code, BYTE *li)
 {
-	BYTE li;
+	if(stream_get_left(s) < 3)
+		return FALSE;
 
-	stream_read_BYTE(s, li); /* LI */
+	stream_read_BYTE(s, *li); /* LI */
 	stream_read_BYTE(s, *code); /* Code */
 
 	if (*code == X224_TPDU_DATA)
@@ -84,10 +84,9 @@ tpdu_read_header(STREAM* s, BYTE* code)
 		/* DST-REF (2 bytes) */
 		/* SRC-REF (2 bytes) */
 		/* Class 0 (1 byte) */
-		stream_seek(s, 5);
+		return stream_skip(s, 5);
 	}
-
-	return li;
+	return TRUE;
 }
 
 /**
@@ -97,8 +96,7 @@ tpdu_read_header(STREAM* s, BYTE* code)
  * @param code TPDU code
  */
 
-void
-tpdu_write_header(STREAM* s, UINT16 length, BYTE code)
+void tpdu_write_header(STREAM* s, UINT16 length, BYTE code)
 {
 	stream_write_BYTE(s, length); /* LI */
 	stream_write_BYTE(s, code); /* code */
@@ -121,20 +119,20 @@ tpdu_write_header(STREAM* s, UINT16 length, BYTE code)
  * @return length indicator (LI)
  */
 
-BYTE tpdu_read_connection_request(STREAM* s)
+BOOL tpdu_read_connection_request(STREAM* s, BYTE *li)
 {
-	BYTE li;
 	BYTE code;
 
-	li = tpdu_read_header(s, &code);
+	if(!tpdu_read_header(s, &code, li))
+		return FALSE;
 
 	if (code != X224_TPDU_CONNECTION_REQUEST)
 	{
 		printf("Error: expected X224_TPDU_CONNECTION_REQUEST\n");
-		return 0;
+		return FALSE;
 	}
 
-	return li;
+	return TRUE;
 }
 
 /**
@@ -143,8 +141,7 @@ BYTE tpdu_read_connection_request(STREAM* s)
  * @param length TPDU length
  */
 
-void
-tpdu_write_connection_request(STREAM* s, UINT16 length)
+void tpdu_write_connection_request(STREAM* s, UINT16 length)
 {
 	tpdu_write_header(s, length, X224_TPDU_CONNECTION_REQUEST);
 }
@@ -155,21 +152,20 @@ tpdu_write_connection_request(STREAM* s, UINT16 length)
  * @return length indicator (LI)
  */
 
-BYTE
-tpdu_read_connection_confirm(STREAM* s)
+BOOL tpdu_read_connection_confirm(STREAM* s, BYTE *li)
 {
-	BYTE li;
 	BYTE code;
 
-	li = tpdu_read_header(s, &code);
+	if(!tpdu_read_header(s, &code, li))
+		return FALSE;
 
 	if (code != X224_TPDU_CONNECTION_CONFIRM)
 	{
 		printf("Error: expected X224_TPDU_CONNECTION_CONFIRM\n");
-		return 0;
+		return FALSE;
 	}
 
-	return li;
+	return (stream_get_left(s) >= *li);
 }
 
 /**
@@ -178,8 +174,7 @@ tpdu_read_connection_confirm(STREAM* s)
  * @param length TPDU length
  */
 
-void
-tpdu_write_connection_confirm(STREAM* s, UINT16 length)
+void tpdu_write_connection_confirm(STREAM* s, UINT16 length)
 {
 	tpdu_write_header(s, length, X224_TPDU_CONNECTION_CONFIRM);
 }
@@ -190,8 +185,7 @@ tpdu_write_connection_confirm(STREAM* s, UINT16 length)
  * @param length TPDU length
  */
 
-void
-tpdu_write_disconnect_request(STREAM* s, UINT16 length)
+void tpdu_write_disconnect_request(STREAM* s, UINT16 length)
 {
 	tpdu_write_header(s, length, X224_TPDU_DISCONNECT_REQUEST);
 }
@@ -201,8 +195,7 @@ tpdu_write_disconnect_request(STREAM* s, UINT16 length)
  * @param s stream
  */
 
-void
-tpdu_write_data(STREAM* s)
+void tpdu_write_data(STREAM* s)
 {
 	tpdu_write_header(s, 2, X224_TPDU_DATA);
 }
@@ -212,16 +205,16 @@ tpdu_write_data(STREAM* s)
  * @param s stream
  */
 
-UINT16
-tpdu_read_data(STREAM* s)
+BOOL tpdu_read_data(STREAM* s, UINT16 *LI)
 {
 	BYTE code;
-	UINT16 li;
+	BYTE li;
 
-	li = tpdu_read_header(s, &code);
+	if(!tpdu_read_header(s, &code, &li))
+		return FALSE;
 
 	if (code != X224_TPDU_DATA)
-		return 0;
-
-	return li;
+		return FALSE;
+	*LI = li;
+	return TRUE;
 }

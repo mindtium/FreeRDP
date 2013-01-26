@@ -22,13 +22,14 @@
 #include <locale.h>
 
 #include <freerdp/freerdp.h>
-#include <freerdp/utils/args.h>
-#include <freerdp/utils/memory.h>
-#include <freerdp/utils/event.h>
 #include <freerdp/constants.h>
+#include <freerdp/utils/event.h>
+#include <freerdp/client/file.h>
+#include <freerdp/client/cmdline.h>
 #include <freerdp/client/channels.h>
 #include <freerdp/client/cliprdr.h>
 
+#include <winpr/crt.h>
 #include <winpr/synch.h>
 
 #include "df_event.h"
@@ -120,43 +121,49 @@ BOOL df_pre_connect(freerdp* instance)
 	dfContext* context;
 	rdpSettings* settings;
 
-	dfi = (dfInfo*) xzalloc(sizeof(dfInfo));
+	dfi = (dfInfo*) malloc(sizeof(dfInfo));
+	ZeroMemory(dfi, sizeof(dfInfo));
+
 	context = ((dfContext*) instance->context);
 	context->dfi = dfi;
 
 	settings = instance->settings;
-	bitmap_cache = settings->bitmap_cache;
+	bitmap_cache = settings->BitmapCacheEnabled;
 
-	settings->order_support[NEG_DSTBLT_INDEX] = TRUE;
-	settings->order_support[NEG_PATBLT_INDEX] = TRUE;
-	settings->order_support[NEG_SCRBLT_INDEX] = TRUE;
-	settings->order_support[NEG_OPAQUE_RECT_INDEX] = TRUE;
-	settings->order_support[NEG_DRAWNINEGRID_INDEX] = FALSE;
-	settings->order_support[NEG_MULTIDSTBLT_INDEX] = FALSE;
-	settings->order_support[NEG_MULTIPATBLT_INDEX] = FALSE;
-	settings->order_support[NEG_MULTISCRBLT_INDEX] = FALSE;
-	settings->order_support[NEG_MULTIOPAQUERECT_INDEX] = TRUE;
-	settings->order_support[NEG_MULTI_DRAWNINEGRID_INDEX] = FALSE;
-	settings->order_support[NEG_LINETO_INDEX] = TRUE;
-	settings->order_support[NEG_POLYLINE_INDEX] = TRUE;
-	settings->order_support[NEG_MEMBLT_INDEX] = bitmap_cache;
-	settings->order_support[NEG_MEM3BLT_INDEX] = FALSE;
-	settings->order_support[NEG_MEMBLT_V2_INDEX] = bitmap_cache;
-	settings->order_support[NEG_MEM3BLT_V2_INDEX] = FALSE;
-	settings->order_support[NEG_SAVEBITMAP_INDEX] = FALSE;
-	settings->order_support[NEG_GLYPH_INDEX_INDEX] = FALSE;
-	settings->order_support[NEG_FAST_INDEX_INDEX] = FALSE;
-	settings->order_support[NEG_FAST_GLYPH_INDEX] = FALSE;
-	settings->order_support[NEG_POLYGON_SC_INDEX] = FALSE;
-	settings->order_support[NEG_POLYGON_CB_INDEX] = FALSE;
-	settings->order_support[NEG_ELLIPSE_SC_INDEX] = FALSE;
-	settings->order_support[NEG_ELLIPSE_CB_INDEX] = FALSE;
+	settings->OrderSupport[NEG_DSTBLT_INDEX] = TRUE;
+	settings->OrderSupport[NEG_PATBLT_INDEX] = TRUE;
+	settings->OrderSupport[NEG_SCRBLT_INDEX] = TRUE;
+	settings->OrderSupport[NEG_OPAQUE_RECT_INDEX] = TRUE;
+	settings->OrderSupport[NEG_DRAWNINEGRID_INDEX] = FALSE;
+	settings->OrderSupport[NEG_MULTIDSTBLT_INDEX] = FALSE;
+	settings->OrderSupport[NEG_MULTIPATBLT_INDEX] = FALSE;
+	settings->OrderSupport[NEG_MULTISCRBLT_INDEX] = FALSE;
+	settings->OrderSupport[NEG_MULTIOPAQUERECT_INDEX] = TRUE;
+	settings->OrderSupport[NEG_MULTI_DRAWNINEGRID_INDEX] = FALSE;
+	settings->OrderSupport[NEG_LINETO_INDEX] = TRUE;
+	settings->OrderSupport[NEG_POLYLINE_INDEX] = TRUE;
+	settings->OrderSupport[NEG_MEMBLT_INDEX] = bitmap_cache;
+	settings->OrderSupport[NEG_MEM3BLT_INDEX] = FALSE;
+	settings->OrderSupport[NEG_MEMBLT_V2_INDEX] = bitmap_cache;
+	settings->OrderSupport[NEG_MEM3BLT_V2_INDEX] = FALSE;
+	settings->OrderSupport[NEG_SAVEBITMAP_INDEX] = FALSE;
+	settings->OrderSupport[NEG_GLYPH_INDEX_INDEX] = FALSE;
+	settings->OrderSupport[NEG_FAST_INDEX_INDEX] = FALSE;
+	settings->OrderSupport[NEG_FAST_GLYPH_INDEX] = FALSE;
+	settings->OrderSupport[NEG_POLYGON_SC_INDEX] = FALSE;
+	settings->OrderSupport[NEG_POLYGON_CB_INDEX] = FALSE;
+	settings->OrderSupport[NEG_ELLIPSE_SC_INDEX] = FALSE;
+	settings->OrderSupport[NEG_ELLIPSE_CB_INDEX] = FALSE;
 
-	dfi->clrconv = xnew(CLRCONV);
+	dfi->clrconv = (CLRCONV*) malloc(sizeof(CLRCONV));
+	ZeroMemory(dfi->clrconv, sizeof(CLRCONV));
+
 	dfi->clrconv->alpha = 1;
 	dfi->clrconv->invert = 0;
 	dfi->clrconv->rgb555 = 0;
-	dfi->clrconv->palette = xnew(rdpPalette);
+
+	dfi->clrconv->palette = (rdpPalette*) malloc(sizeof(rdpPalette));
+	ZeroMemory(dfi->clrconv->palette, sizeof(rdpPalette));
 
 	freerdp_channels_pre_connect(instance->context->channels, instance);
 
@@ -221,31 +228,10 @@ BOOL df_post_connect(freerdp* instance)
 	return TRUE;
 }
 
-static int df_process_plugin_args(rdpSettings* settings, const char* name,
-	RDP_PLUGIN_DATA* plugin_data, void* user_data)
-{
-	void* entry = NULL;
-	rdpChannels* channels = (rdpChannels*) user_data;
-
-	entry = freerdp_channels_find_static_virtual_channel_entry(name);
-
-	if (entry)
-	{
-		if (freerdp_channels_client_load(channels, settings, entry, plugin_data) == 0)
-		{
-			printf("loading channel %s (static)\n", name);
-			return 1;
-		}
-	}
-
-	printf("loading channel %s (plugin)\n", name);
-	freerdp_channels_load_plugin(channels, settings, name, plugin_data);
-
-	return 1;
-}
-
 BOOL df_verify_certificate(freerdp* instance, char* subject, char* issuer, char* fingerprint)
 {
+	char answer;
+
 	printf("Certificate details:\n");
 	printf("\tSubject: %s\n", subject);
 	printf("\tIssuer: %s\n", issuer);
@@ -254,7 +240,6 @@ BOOL df_verify_certificate(freerdp* instance, char* subject, char* issuer, char*
 		"the CA certificate in your certificate store, or the certificate has expired. "
 		"Please look at the documentation on how to create local certificate store for a private CA.\n");
 
-	char answer;
 	while (1)
 	{
 		printf("Do you trust the above certificate? (Y/N) ");
@@ -445,6 +430,7 @@ void* thread_func(void* param)
 
 int main(int argc, char* argv[])
 {
+	int status;
 	pthread_t thread;
 	freerdp* instance;
 	dfContext* context;
@@ -472,9 +458,20 @@ int main(int argc, char* argv[])
 	channels = instance->context->channels;
 
 	DirectFBInit(&argc, &argv);
-	freerdp_parse_args(instance->settings, argc, argv, df_process_plugin_args, channels, NULL, NULL);
 
-	data = (struct thread_data*) xzalloc(sizeof(struct thread_data));
+	instance->context->argc = argc;
+	instance->context->argv = argv;
+
+	status = freerdp_client_parse_command_line_arguments(argc, argv, instance->settings);
+
+	if (status < 0)
+		exit(0);
+
+	freerdp_client_load_addins(instance->context->channels, instance->settings);
+
+	data = (struct thread_data*) malloc(sizeof(struct thread_data));
+	ZeroMemory(data, sizeof(sizeof(struct thread_data)));
+
 	data->instance = instance;
 
 	g_thread_count++;

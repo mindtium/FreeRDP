@@ -21,11 +21,12 @@
 #include "config.h"
 #endif
 
-#include <freerdp/utils/memory.h>
 #include <freerdp/codec/bitmap.h>
 
 #include "wf_gdi.h"
 #include "wf_graphics.h"
+
+extern HINSTANCE g_hInstance; /* in wfreerdp.c */
 
 HBITMAP wf_create_dib(wfInfo* wfi, int width, int height, int bpp, BYTE* data, BYTE** pdata)
 {
@@ -78,7 +79,7 @@ wfBitmap* wf_image_new(wfInfo* wfi, int width, int height, int bpp, BYTE* data)
 
 	image->org_bitmap = (HBITMAP) SelectObject(image->hdc, image->bitmap);
 	ReleaseDC(NULL, hdc);
-	
+
 	return image;
 }
 
@@ -118,7 +119,7 @@ void wf_Bitmap_New(rdpContext* context, rdpBitmap* bitmap)
 void wf_Bitmap_Free(rdpContext* context, rdpBitmap* bitmap)
 {
 	wfBitmap* wf_bitmap = (wfBitmap*) bitmap;
-	
+
 	if (wf_bitmap != 0)
 	{
 		SelectObject(wf_bitmap->hdc, wf_bitmap->org_bitmap);
@@ -189,17 +190,62 @@ void wf_Bitmap_SetSurface(rdpContext* context, rdpBitmap* bitmap, BOOL primary)
 
 void wf_Pointer_New(rdpContext* context, rdpPointer* pointer)
 {
+	HCURSOR hCur;
+	ICONINFO info;
+	BYTE *data;
 
+	info.fIcon = FALSE;
+	info.xHotspot = pointer->xPos;
+	info.yHotspot = pointer->yPos;
+	if (pointer->xorBpp == 1)
+	{
+		data = (BYTE*) malloc(pointer->lengthAndMask + pointer->lengthXorMask);
+		CopyMemory(data, pointer->andMaskData, pointer->lengthAndMask);
+		CopyMemory(data + pointer->lengthAndMask, pointer->xorMaskData, pointer->lengthXorMask);
+		info.hbmMask = CreateBitmap(pointer->width, pointer->height * 2, 1, 1, data);
+		free(data);
+		info.hbmColor = NULL;
+	}
+	else
+	{
+		data = (BYTE*) malloc(pointer->lengthAndMask);
+		freerdp_bitmap_flip(pointer->andMaskData, data, (pointer->width + 7) / 8, pointer->height);
+		info.hbmMask = CreateBitmap(pointer->width, pointer->height, 1, 1, data);
+		free(data);
+		data = (BYTE*) malloc(pointer->lengthXorMask);
+		freerdp_image_flip(pointer->xorMaskData, data, pointer->width, pointer->height, pointer->xorBpp);
+		info.hbmColor = CreateBitmap(pointer->width, pointer->height, 1, pointer->xorBpp, data);
+		free(data);
+	}
+	hCur = CreateIconIndirect(&info);
+	((wfPointer*) pointer)->cursor = hCur;
+	if (info.hbmMask)
+		DeleteObject(info.hbmMask);
+	if (info.hbmColor)
+		DeleteObject(info.hbmColor);
 }
 
 void wf_Pointer_Free(rdpContext* context, rdpPointer* pointer)
 {
+	HCURSOR hCur;
 
+	hCur = ((wfPointer*) pointer)->cursor;
+	if (hCur != 0)
+		DestroyIcon(hCur);
 }
 
 void wf_Pointer_Set(rdpContext* context, rdpPointer* pointer)
 {
+	wfInfo* wfi;
+	HCURSOR hCur;
 
+	wfi = ((wfContext*) context)->wfi;
+	hCur = ((wfPointer*) pointer)->cursor;
+	if (hCur != NULL)
+	{
+		SetCursor(hCur);
+		wfi->cursor = hCur;
+	}
 }
 
 void wf_Pointer_SetNull(rdpContext* context)

@@ -31,7 +31,6 @@
 #include "liblocale.h"
 
 #include <freerdp/utils/time.h>
-#include <freerdp/utils/memory.h>
 
 #include <freerdp/locale/timezone.h>
 
@@ -1609,9 +1608,9 @@ TIME_ZONE_ENTRY* freerdp_detect_windows_time_zone(UINT32 bias)
 	if (tzid == NULL)
 		return NULL;
 
-	for (i = 0; i < ARRAY_SIZE(TimeZoneTable); i++)
+	for (i = 0; i < ARRAYSIZE(TimeZoneTable); i++)
 	{
-		for (j = 0; j < ARRAY_SIZE(WindowsTimeZoneIdTable); j++)
+		for (j = 0; j < ARRAYSIZE(WindowsTimeZoneIdTable); j++)
 		{
 			if (strcmp(TimeZoneTable[i].Id, WindowsTimeZoneIdTable[j].windows) != 0)
 				continue;
@@ -1666,7 +1665,7 @@ void freerdp_time_zone_detect(TIME_ZONE_INFO* clientTimeZone)
 		clientTimeZone->bias = (UINT32) (local_time->tm_gmtoff / 60);
 	else
 		clientTimeZone->bias = (UINT32) (1440 + (INT32) (local_time->tm_gmtoff / 60));
-#elif sun
+#elif defined(sun)
 	if (local_time->tm_isdst > 0)
 		clientTimeZone->bias = (UINT32) (altzone / 3600);
 	else

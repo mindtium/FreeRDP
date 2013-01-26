@@ -22,7 +22,12 @@
 #endif
 
 #include <X11/Xlib.h>
-#include <freerdp/utils/sleep.h>
+
+#include <sys/select.h>
+#include <sys/signal.h>
+
+#include <winpr/crt.h>
+#include <winpr/synch.h>
 
 #include "xf_encode.h"
 
@@ -91,12 +96,12 @@ void* xf_frame_rate_thread(void* param)
 
 	while (1)
 	{
-		// check if we should terminate
+		/* check if we should terminate */
 		pthread_testcancel();
 		
 		event = xf_event_new(XF_EVENT_TYPE_FRAME_TICK);
 		xf_event_push(xfp->event_queue, (xfEvent*) event);
-		freerdp_usleep(wait_interval);
+		USleep(wait_interval);
 	}
 }
 
@@ -128,7 +133,7 @@ void* xf_monitor_updates(void* param)
 
 	while (1)
 	{
-		// check if we should terminate
+		/* check if we should terminate */
 		pthread_testcancel();
 
 		FD_ZERO(&rfds_set);

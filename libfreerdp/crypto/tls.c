@@ -21,8 +21,11 @@
 #include "config.h"
 #endif
 
+#include <winpr/crt.h>
+#include <winpr/sspi.h>
+
 #include <freerdp/utils/stream.h>
-#include <freerdp/utils/memory.h>
+#include <freerdp/utils/tcp.h>
 
 #include <freerdp/crypto/tls.h>
 
@@ -54,6 +57,42 @@ static void tls_free_certificate(CryptoCert cert)
 {
 	X509_free(cert->px509);
 	free(cert);
+}
+
+#define TLS_SERVER_END_POINT	"tls-server-end-point:"
+
+SecPkgContext_Bindings* tls_get_channel_bindings(X509* cert)
+{
+	int PrefixLength;
+	BYTE CertificateHash[32];
+	UINT32 CertificateHashLength;
+	BYTE* ChannelBindingToken;
+	UINT32 ChannelBindingTokenLength;
+	SEC_CHANNEL_BINDINGS* ChannelBindings;
+	SecPkgContext_Bindings* ContextBindings;
+
+	ZeroMemory(CertificateHash, sizeof(CertificateHash));
+	X509_digest(cert, EVP_sha256(), CertificateHash, &CertificateHashLength);
+
+	PrefixLength = strlen(TLS_SERVER_END_POINT);
+	ChannelBindingTokenLength = PrefixLength + CertificateHashLength;
+
+	ContextBindings = (SecPkgContext_Bindings*) malloc(sizeof(SecPkgContext_Bindings));
+	ZeroMemory(ContextBindings, sizeof(SecPkgContext_Bindings));
+
+	ContextBindings->BindingsLength = sizeof(SEC_CHANNEL_BINDINGS) + ChannelBindingTokenLength;
+	ChannelBindings = (SEC_CHANNEL_BINDINGS*) malloc(ContextBindings->BindingsLength);
+	ZeroMemory(ChannelBindings, ContextBindings->BindingsLength);
+	ContextBindings->Bindings = ChannelBindings;
+
+	ChannelBindings->cbApplicationDataLength = ChannelBindingTokenLength;
+	ChannelBindings->dwApplicationDataOffset = sizeof(SEC_CHANNEL_BINDINGS);
+	ChannelBindingToken = &((BYTE*) ChannelBindings)[ChannelBindings->dwApplicationDataOffset];
+
+	strcpy((char*) ChannelBindingToken, TLS_SERVER_END_POINT);
+	CopyMemory(&ChannelBindingToken[PrefixLength], CertificateHash, CertificateHashLength);
+
+	return ContextBindings;
 }
 
 BOOL tls_connect(rdpTls* tls)
@@ -133,6 +172,8 @@ BOOL tls_connect(rdpTls* tls)
 		return FALSE;
 	}
 
+	tls->Bindings = tls_get_channel_bindings(cert->px509);
+
 	if (!crypto_cert_get_public_key(cert, &tls->PublicKey, &tls->PublicKeyLength))
 	{
 		printf("tls_connect: crypto_cert_get_public_key failed to return the server public key.\n");
@@ -140,7 +181,7 @@ BOOL tls_connect(rdpTls* tls)
 		return FALSE;
 	}
 
-	if (!tls_verify_certificate(tls, cert, tls->settings->hostname))
+	if (!tls_verify_certificate(tls, cert, tls->settings->ServerHostname))
 	{
 		printf("tls_connect: certificate not trusted, aborting.\n");
 		tls_disconnect(tls);
@@ -205,6 +246,8 @@ BOOL tls_accept(rdpTls* tls, const char* cert_file, const char* privatekey_file)
 	options |= SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;
 
 	SSL_CTX_set_options(tls->ctx, options);
+
+	printf("private key file: %s\n", privatekey_file);
 
 	if (SSL_CTX_use_RSAPrivateKey_file(tls->ctx, privatekey_file, SSL_FILETYPE_PEM) <= 0)
 	{
@@ -283,29 +326,39 @@ BOOL tls_disconnect(rdpTls* tls)
 {
 	if (tls->ssl)
 		SSL_shutdown(tls->ssl);
+
 	return TRUE;
 }
 
 int tls_read(rdpTls* tls, BYTE* data, int length)
 {
+	int error;
 	int status;
 
 	status = SSL_read(tls->ssl, data, length);
 
-	switch (SSL_get_error(tls->ssl, status))
+	if (status <= 0)
 	{
-		case SSL_ERROR_NONE:
-			break;
+		error = SSL_get_error(tls->ssl, status);
 
-		case SSL_ERROR_WANT_READ:
-		case SSL_ERROR_WANT_WRITE:
-			status = 0;
-			break;
+		//printf("tls_read: length: %d status: %d error: 0x%08X\n",
+		//		length, status, error);
 
-		default:
-			tls_print_error("SSL_read", tls->ssl, status);
-			status = -1;
-			break;
+		switch (error)
+		{
+			case SSL_ERROR_NONE:
+				break;
+
+			case SSL_ERROR_WANT_READ:
+			case SSL_ERROR_WANT_WRITE:
+				status = 0;
+				break;
+
+			default:
+				tls_print_error("SSL_read", tls->ssl, status);
+				status = -1;
+				break;
+		}
 	}
 
 	return status;
@@ -318,6 +371,8 @@ int tls_read_all(rdpTls* tls, BYTE* data, int length)
 	do
 	{
 		status = tls_read(tls, data, length);
+		if (status == 0)
+			tls_wait_read(tls);
 	}
 	while (status == 0);
 
@@ -326,29 +381,37 @@ int tls_read_all(rdpTls* tls, BYTE* data, int length)
 
 int tls_write(rdpTls* tls, BYTE* data, int length)
 {
+	int error;
 	int status;
 
 	status = SSL_write(tls->ssl, data, length);
 
-	switch (SSL_get_error(tls->ssl, status))
+	if (status <= 0)
 	{
-		case SSL_ERROR_NONE:
-			break;
+		error = SSL_get_error(tls->ssl, status);
 
-		case SSL_ERROR_WANT_READ:
-		case SSL_ERROR_WANT_WRITE:
-			status = 0;
-			break;
+		//printf("tls_write: length: %d status: %d error: 0x%08X\n",
+		//		length, status, error);
 
-		default:
-			tls_print_error("SSL_write", tls->ssl, status);
-			status = -1;
-			break;
+		switch (error)
+		{
+			case SSL_ERROR_NONE:
+				break;
+
+			case SSL_ERROR_WANT_READ:
+			case SSL_ERROR_WANT_WRITE:
+				status = 0;
+				break;
+
+			default:
+				tls_print_error("SSL_write", tls->ssl, status);
+				status = -1;
+				break;
+		}
 	}
 
 	return status;
 }
-
 
 int tls_write_all(rdpTls* tls, BYTE* data, int length)
 {
@@ -361,6 +424,8 @@ int tls_write_all(rdpTls* tls, BYTE* data, int length)
 
 		if (status > 0)
 			sent += status;
+		else if (status == 0)
+			tls_wait_write(tls);
 
 		if (sent >= length)
 			break;
@@ -371,6 +436,16 @@ int tls_write_all(rdpTls* tls, BYTE* data, int length)
 		return length;
 	else
 		return status;
+}
+
+int tls_wait_read(rdpTls* tls)
+{
+	return freerdp_tcp_wait_read(tls->sockfd);
+}
+
+int tls_wait_write(rdpTls* tls)
+{
+	return freerdp_tcp_wait_write(tls->sockfd);
 }
 
 static void tls_errors(const char *prefix)
@@ -429,12 +504,12 @@ BOOL tls_verify_certificate(rdpTls* tls, CryptoCert cert, char* hostname)
 	rdpCertificateData* certificate_data;
 
 	/* ignore certificate verification if user explicitly required it (discouraged) */
-	if (tls->settings->ignore_certificate)
+	if (tls->settings->IgnoreCertificate)
 		return TRUE;  /* success! */
 
 	/* if user explicitly specified a certificate name, use it instead of the hostname */
-	if (tls->settings->certificate_name)
-		hostname = tls->settings->certificate_name;
+	if (tls->settings->CertificateName)
+		hostname = tls->settings->CertificateName;
 
 	/* attempt verification using OpenSSL and the ~/.freerdp/certs certificate store */
 	certificate_status = x509_verify_certificate(cert, tls->certificate_store->path);
@@ -562,6 +637,10 @@ BOOL tls_verify_certificate(rdpTls* tls, CryptoCert cert, char* hostname)
 		free(certificate_data);
 	}
 
+#ifndef _WIN32
+	free(common_name);
+#endif
+
 	return verification_status;
 }
 
@@ -615,10 +694,12 @@ rdpTls* tls_new(rdpSettings* settings)
 {
 	rdpTls* tls;
 
-	tls = (rdpTls*) xzalloc(sizeof(rdpTls));
+	tls = (rdpTls*) malloc(sizeof(rdpTls));
 
 	if (tls != NULL)
 	{
+		ZeroMemory(tls, sizeof(rdpTls));
+
 		SSL_load_error_strings();
 		SSL_library_init();
 

@@ -28,6 +28,8 @@
 #include <X11/Xcursor/Xcursor.h>
 #endif
 
+#include <winpr/crt.h>
+
 #include <freerdp/codec/bitmap.h>
 #include <freerdp/codec/rfx.h>
 #include <freerdp/codec/jpeg.h>
@@ -50,7 +52,7 @@ void xf_Bitmap_New(rdpContext* context, rdpBitmap* bitmap)
 	if (bitmap->data != NULL)
 	{
 		data = freerdp_image_convert(bitmap->data, NULL,
-				bitmap->width, bitmap->height, context_->settings->color_depth, xfi->bpp, xfi->clrconv);
+				bitmap->width, bitmap->height, context_->settings->ColorDepth, xfi->bpp, xfi->clrconv);
 
 		if (bitmap->ephemeral != TRUE)
 		{
@@ -133,10 +135,10 @@ void xf_Bitmap_Decompress(rdpContext* context, rdpBitmap* bitmap,
 
 	switch (codec_id)
 	{
-		case CODEC_ID_NSCODEC:
+		case RDP_CODEC_ID_NSCODEC:
 			printf("xf_Bitmap_Decompress: nsc not done\n");
 			break;
-		case CODEC_ID_REMOTEFX:
+		case RDP_CODEC_ID_REMOTEFX:
 			xfi = ((xfContext*)context)->xfi;
 			rfx_context_set_pixel_format(xfi->rfx_context, RDP_PIXEL_FORMAT_B8G8R8A8);
 			msg = rfx_process_message(xfi->rfx_context, data, length);
@@ -161,7 +163,7 @@ void xf_Bitmap_Decompress(rdpContext* context, rdpBitmap* bitmap,
 				rfx_message_free(xfi->rfx_context, msg);
 			}
 			break;
-		case CODEC_ID_JPEG:
+		case RDP_CODEC_ID_JPEG:
 			if (!jpeg_decompress(data, bitmap->data, width, height, length, bpp))
 			{
 				printf("xf_Bitmap_Decompress: jpeg Decompression Failed\n");
@@ -203,6 +205,7 @@ void xf_Bitmap_SetSurface(rdpContext* context, rdpBitmap* bitmap, BOOL primary)
 
 void xf_Pointer_New(rdpContext* context, rdpPointer* pointer)
 {
+#ifdef WITH_XCURSOR
 	XcursorImage ci;
 	xfInfo* xfi = ((xfContext*) context)->xfi;
 
@@ -213,7 +216,9 @@ void xf_Pointer_New(rdpContext* context, rdpPointer* pointer)
 	ci.height = pointer->height;
 	ci.xhot = pointer->xPos;
 	ci.yhot = pointer->yPos;
-	ci.pixels = (XcursorPixel*) xzalloc(ci.width * ci.height * 4);
+
+	ci.pixels = (XcursorPixel*) malloc(ci.width * ci.height * 4);
+	ZeroMemory(ci.pixels, ci.width * ci.height * 4);
 
 	if ((pointer->andMaskData != 0) && (pointer->xorMaskData != 0))
 	{
@@ -222,29 +227,36 @@ void xf_Pointer_New(rdpContext* context, rdpPointer* pointer)
 	}
 
 	((xfPointer*) pointer)->cursor = XcursorImageLoadCursor(xfi->display, &ci);
+
 	free(ci.pixels);
+#endif
 }
 
 void xf_Pointer_Free(rdpContext* context, rdpPointer* pointer)
 {
+#ifdef WITH_XCURSOR
 	xfInfo* xfi = ((xfContext*) context)->xfi;
 
 	if (((xfPointer*) pointer)->cursor != 0)
 		XFreeCursor(xfi->display, ((xfPointer*) pointer)->cursor);
+#endif
 }
 
 void xf_Pointer_Set(rdpContext* context, rdpPointer* pointer)
 {
+#ifdef WITH_XCURSOR
 	xfInfo* xfi = ((xfContext*) context)->xfi;
 
 	/* in RemoteApp mode, window can be null if none has had focus */
 
 	if (xfi->window != NULL)
 		XDefineCursor(xfi->display, xfi->window->handle, ((xfPointer*) pointer)->cursor);
+#endif
 }
 
 void xf_Pointer_SetNull(rdpContext* context)
 {
+#ifdef WITH_XCURSOR
 	xfInfo* xfi = ((xfContext*) context)->xfi;
 	static Cursor nullcursor = None;
 
@@ -260,16 +272,20 @@ void xf_Pointer_SetNull(rdpContext* context)
 		ci.pixels = &xp;
 		nullcursor = XcursorImageLoadCursor(xfi->display, &ci);
 	}
+
 	if (xfi->window != NULL && nullcursor != None)
 		XDefineCursor(xfi->display, xfi->window->handle, nullcursor);
+#endif
 }
 
 void xf_Pointer_SetDefault(rdpContext* context)
 {
+#ifdef WITH_XCURSOR
 	xfInfo* xfi = ((xfContext*) context)->xfi;
 
 	if (xfi->window != NULL)
 		XUndefineCursor(xfi->display, xfi->window->handle);
+#endif
 }
 
 /* Glyph Class */
@@ -326,12 +342,12 @@ void xf_Glyph_BeginDraw(rdpContext* context, int x, int y, int width, int height
 	xfInfo* xfi = context_->xfi;
 
 	bgcolor = (xfi->clrconv->invert)?
-		freerdp_color_convert_var_bgr(bgcolor, context_->settings->color_depth, xfi->bpp, xfi->clrconv):
-		freerdp_color_convert_var_rgb(bgcolor, context_->settings->color_depth, xfi->bpp, xfi->clrconv);
+		freerdp_color_convert_var_bgr(bgcolor, context_->settings->ColorDepth, xfi->bpp, xfi->clrconv):
+		freerdp_color_convert_var_rgb(bgcolor, context_->settings->ColorDepth, xfi->bpp, xfi->clrconv);
 
 	fgcolor = (xfi->clrconv->invert)?
-		freerdp_color_convert_var_bgr(fgcolor, context_->settings->color_depth, xfi->bpp, xfi->clrconv):
-		freerdp_color_convert_var_rgb(fgcolor, context_->settings->color_depth, xfi->bpp, xfi->clrconv);
+		freerdp_color_convert_var_bgr(fgcolor, context_->settings->ColorDepth, xfi->bpp, xfi->clrconv):
+		freerdp_color_convert_var_rgb(fgcolor, context_->settings->ColorDepth, xfi->bpp, xfi->clrconv);
 
 	XSetFunction(xfi->display, xfi->gc, GXcopy);
 	XSetFillStyle(xfi->display, xfi->gc, FillSolid);
@@ -366,7 +382,9 @@ void xf_register_graphics(rdpGraphics* graphics)
 	rdpPointer* pointer;
 	rdpGlyph* glyph;
 
-	bitmap = xnew(rdpBitmap);
+	bitmap = (rdpBitmap*) malloc(sizeof(rdpBitmap));
+	ZeroMemory(bitmap, sizeof(rdpBitmap));
+
 	bitmap->size = sizeof(xfBitmap);
 
 	bitmap->New = xf_Bitmap_New;
@@ -378,7 +396,9 @@ void xf_register_graphics(rdpGraphics* graphics)
 	graphics_register_bitmap(graphics, bitmap);
 	free(bitmap);
 
-	pointer = xnew(rdpPointer);
+	pointer = (rdpPointer*) malloc(sizeof(rdpPointer));
+	ZeroMemory(pointer, sizeof(rdpPointer));
+
 	pointer->size = sizeof(xfPointer);
 
 	pointer->New = xf_Pointer_New;
@@ -390,7 +410,9 @@ void xf_register_graphics(rdpGraphics* graphics)
 	graphics_register_pointer(graphics, pointer);
 	free(pointer);
 
-	glyph = xnew(rdpGlyph);
+	glyph = (rdpGlyph*) malloc(sizeof(rdpGlyph));
+	ZeroMemory(glyph, sizeof(rdpGlyph));
+
 	glyph->size = sizeof(xfGlyph);
 
 	glyph->New = xf_Glyph_New;

@@ -3,7 +3,7 @@ CMakeFiles/
 CMakeScripts/
 CMakeCache.txt
 config.h
-install_manifest.txt
+install_manifest*.txt
 CTestTestfile.cmake
 freerdp.pc
 Makefile
@@ -12,11 +12,25 @@ cmake_install.cmake
 CPackConfig.cmake
 CPackSourceConfig.cmake
 DartConfiguration.tcl
+_CPack_Packages
+
+# Packages
+*.zip
+*.exe
+*.sh
+*.deb
+*.rpm
+*.tar.Z
+*.tar.gz
 
 # Eclipse
 *.project
 *.cproject
 *.settings
+
+# .rdp files
+*.rdp
+*.RDP
 
 # Documentation
 docs/api
@@ -45,6 +59,8 @@ RelWithDebInfo
 *.so
 *.so.*
 *.dylib
+bin
+libs
 cunit/test_freerdp
 client/X11/xfreerdp
 client/Mac/xcode

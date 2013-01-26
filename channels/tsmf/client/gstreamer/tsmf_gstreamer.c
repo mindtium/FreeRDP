@@ -1205,7 +1205,7 @@ static BOOL tsmf_gstreamer_decodeEx(ITSMFDecoder * decoder, const BYTE * data, U
 
 			if (fout)
 			{
-				fprintf(fout, "%"PRIu64"\n", start_time);
+				fprintf(fout, "%"PRIu64"\n", (long unsigned int) start_time);
 				fclose(fout);
 			}
 
@@ -1231,7 +1231,7 @@ static BOOL tsmf_gstreamer_decodeEx(ITSMFDecoder * decoder, const BYTE * data, U
 			if (fin)
 			{
 				UINT64 AStartTime = 0;
-				fscanf(fin, "%"PRIu64, &AStartTime);
+				fscanf(fin, "%"PRIu64, (long unsigned int*) &AStartTime);
 				fclose(fin);
 				if (start_time > AStartTime)
 				{
@@ -1265,7 +1265,7 @@ static BOOL tsmf_gstreamer_decodeEx(ITSMFDecoder * decoder, const BYTE * data, U
 			if (fin)
 			{
 				UINT64 VStartTime = 0;
-				fscanf(fin, "%"PRIu64, &VStartTime);
+				fscanf(fin, "%"PRIu64, (long unsigned int*) &VStartTime);
 				fclose(fin);
 				if (start_time > VStartTime)
 				{
@@ -1565,10 +1565,13 @@ static void tsmf_gstreamer_update_rendering_area(ITSMFDecoder * decoder, int new
 
 static int initialized = 0;
 
-ITSMFDecoder *
-TSMFDecoderEntry(void)
+#ifdef STATIC_CHANNELS
+#define freerdp_tsmf_client_decoder_subsystem_entry	gstreamer_freerdp_tsmf_client_decoder_subsystem_entry
+#endif
+
+ITSMFDecoder* freerdp_tsmf_client_decoder_subsystem_entry(void)
 {
-	TSMFGstreamerDecoder * decoder;
+	TSMFGstreamerDecoder* decoder;
 
 	if (!initialized)
 	{
